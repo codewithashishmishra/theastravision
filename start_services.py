@@ -60,7 +60,7 @@ def main():
     # 2. Start Services
     print("\n[2/2] Launching Background Services in separate windows...")
     run_in_new_terminal(f'"{api_python}" manage.py runserver 8000', cwd=api_dir, name="Django_API")
-    run_in_new_terminal(f'"{api_celery}" -A config worker -l info', cwd=api_dir, name="Celery_Worker")
+    run_in_new_terminal(f'"{api_celery}" -A config worker -l info --pool=solo', cwd=api_dir, name="Celery_Worker")
     run_in_new_terminal(f'"{api_celery}" -A config beat -l info', cwd=api_dir, name="Celery_Beat")
     run_in_new_terminal(f'"{ai_uvicorn}" main:app --reload --port 8001', cwd=ai_dir, name="AI_Service")
     run_in_new_terminal('npm run dev', cwd=web_dir, name="Frontend_AdminWeb")
