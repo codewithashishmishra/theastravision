@@ -1,0 +1,214 @@
+from django.db import models
+from django.contrib.auth.models import AbstractUser
+import uuid
+from simple_history.models import HistoricalRecords
+from functools import lru_cache
+
+class Tenant(models.Model):
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    name = models.CharField(max_length=255, unique=True)
+    domain = models.CharField(max_length=255, unique=True, null=True, blank=True)
+    email_domain = models.CharField(
+        max_length=255,
+        null=True,
+        blank=True,
+        help_text="Email domain for users in this tenant (e.g. aastraa.com)",
+    )
+    is_active = models.BooleanField(default=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    history = HistoricalRecords()
+
+    def __str__(self):
+        return self.name
+
+class User(AbstractUser):
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    tenant = models.ForeignKey(Tenant, on_delete=models.CASCADE, null=True, blank=True, related_name='users')
+    phone_number = models.CharField(max_length=20, null=True, blank=True)
+    is_mfa_enabled = models.BooleanField(default=False)
+    
+    # Advanced Auth Tracking
+    is_email_verified = models.BooleanField(default=False)
+    failed_login_attempts = models.IntegerField(default=0)
+    locked_until = models.DateTimeField(null=True, blank=True)
+    
+    # Biometric Tracking
+    face_encoding = models.JSONField(null=True, blank=True, help_text="128-dimensional face encoding vector")
+    
+    history = HistoricalRecords()
+
+    def __str__(self):
+        return self.username
+
+class Permission(models.Model):
+    name = models.CharField(max_length=100)
+    code = models.CharField(max_length=100, unique=True) # e.g. 'view_employee'
+    description = models.TextField(null=True, blank=True)
+
+    def __str__(self):
+        return self.name
+
+class Role(models.Model):
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    tenant = models.ForeignKey(Tenant, on_delete=models.CASCADE, null=True, blank=True, related_name='roles')
+    name = models.CharField(max_length=100)
+    description = models.TextField(null=True, blank=True)
+    permissions = models.ManyToManyField(Permission, related_name='roles', blank=True)
+    
+    class Meta:
+        unique_together = ('tenant', 'name')
+
+    def __str__(self):
+        return f"{self.name} ({self.tenant.name if self.tenant else 'Global'})"
+
+class UserRoleMapping(models.Model):
+    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='role_mappings')
+    role = models.ForeignKey(Role, on_delete=models.CASCADE, related_name='user_mappings')
+    
+    class Meta:
+        unique_together = ('user', 'role')
+
+    def __str__(self):
+        return f"{self.user.username} - {self.role.name}"
+
+class SystemAuditLog(models.Model):
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    tenant = models.ForeignKey(Tenant, on_delete=models.CASCADE, null=True, blank=True)
+    user = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True)
+    action = models.CharField(max_length=255)
+    module = models.CharField(max_length=100)
+    ip_address = models.GenericIPAddressField(null=True, blank=True)
+    metadata = models.JSONField(default=dict, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    def __str__(self):
+        return f"[{self.created_at}] {self.user} - {self.action}"
+
+# ----------------- ADVANCED AUTHENTICATION MODELS -----------------
+
+class TOTPDevice(models.Model):
+    user = models.OneToOneField(User, on_delete=models.CASCADE)
+    secret_key = models.CharField(max_length=255)
+    is_verified = models.BooleanField(default=False)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+class RecoveryCode(models.Model):
+    user = models.ForeignKey(User, on_delete=models.CASCADE)
+    code_hash = models.CharField(max_length=255)
+    is_used = models.BooleanField(default=False)
+
+class WebAuthnCredential(models.Model):
+    user = models.ForeignKey(User, on_delete=models.CASCADE)
+    credential_id = models.CharField(max_length=255, unique=True)
+    public_key = models.TextField()
+    sign_count = models.IntegerField(default=0)
+    name = models.CharField(max_length=100) # e.g., "iPhone FaceID"
+
+class MPINCredential(models.Model):
+    user = models.ForeignKey(User, on_delete=models.CASCADE)
+    device_id = models.CharField(max_length=255)
+    mpin_hash = models.CharField(max_length=255)
+    failed_attempts = models.IntegerField(default=0)
+    locked_until = models.DateTimeField(null=True, blank=True)
+
+class TrustedDevice(models.Model):
+    user = models.ForeignKey(User, on_delete=models.CASCADE)
+    device_fingerprint = models.CharField(max_length=255, unique=True)
+    user_agent = models.TextField()
+    ip_address = models.GenericIPAddressField(null=True)
+    last_used_at = models.DateTimeField(auto_now=True)
+    expires_at = models.DateTimeField()
+
+class AuthSession(models.Model):
+    LOGIN_METHODS = (
+        ('password', 'Password'),
+        ('totp', 'TOTP'),
+        ('passkey', 'Passkey'),
+        ('face_scan', 'Face Scan'),
+    )
+    CLIENT_TYPES = (
+        ('web', 'Web Browser'),
+        ('tracker', 'Desktop Tracker'),
+    )
+    user = models.ForeignKey(User, on_delete=models.CASCADE)
+    refresh_token_jti = models.UUIDField(unique=True)
+    client_type = models.CharField(max_length=20, choices=CLIENT_TYPES, default='web')
+    device_fingerprint = models.CharField(max_length=255, null=True, blank=True)
+    ip_address = models.GenericIPAddressField(null=True, blank=True)
+    user_agent = models.TextField(null=True, blank=True)
+    location_city = models.CharField(max_length=255, null=True, blank=True)
+    location_country = models.CharField(max_length=255, null=True, blank=True)
+    login_method = models.CharField(max_length=50, choices=LOGIN_METHODS, default='password')
+    payload_key_wrapped = models.TextField(
+        null=True,
+        blank=True,
+        help_text="AES-256 session data key wrapped with server master key (GCM)",
+    )
+    is_revoked = models.BooleanField(default=False)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+class ConfigSettings(models.Model):
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    name = models.CharField(max_length=255, unique=True, default="default_env_key")
+    wrapped_key = models.TextField(help_text="AES-GCM wrapped data key")
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    @classmethod
+    def get_or_create_key(cls, name="default_env_key") -> bytes:
+        from core.gcm_crypto import generate_data_key, wrap_data_key, unwrap_data_key
+        try:
+            settings_obj = cls.objects.get(name=name)
+            return unwrap_data_key(settings_obj.wrapped_key)
+        except cls.DoesNotExist:
+            data_key = generate_data_key()
+            wrapped = wrap_data_key(data_key)
+            cls.objects.create(name=name, wrapped_key=wrapped)
+            return data_key
+
+class EnvConfiguration(models.Model):
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    module = models.CharField(max_length=100, unique=True, help_text="Module name e.g., 'SMTP', 'DATABASE'")
+    encrypted_config = models.TextField(help_text="AES-GCM encrypted JSON config mapped to base64")
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    def set_config(self, config_dict: dict):
+        import json
+        import base64
+        from core.gcm_crypto import encrypt_blob
+        
+        data_key = ConfigSettings.get_or_create_key()
+        json_str = json.dumps(config_dict)
+        aad = f"env_config:{self.module}".encode('utf-8')
+        encrypted_bytes = encrypt_blob(data_key, json_str.encode('utf-8'), aad)
+        self.encrypted_config = base64.b64encode(encrypted_bytes).decode('ascii')
+        
+        # Clear LRU cache for this module
+        EnvConfiguration.get_cached_config.cache_clear()
+        
+    def get_config(self) -> dict:
+        import json
+        import base64
+        from core.gcm_crypto import decrypt_blob
+        
+        if not self.encrypted_config:
+            return {}
+            
+        data_key = ConfigSettings.get_or_create_key()
+        encrypted_bytes = base64.b64decode(self.encrypted_config)
+        aad = f"env_config:{self.module}".encode('utf-8')
+        try:
+            decrypted_bytes = decrypt_blob(data_key, encrypted_bytes, aad)
+            return json.loads(decrypted_bytes.decode('utf-8'))
+        except Exception:
+            return {}
+
+    @staticmethod
+    @lru_cache(maxsize=128)
+    def get_cached_config(module_name: str) -> dict:
+        try:
+            config = EnvConfiguration.objects.get(module=module_name)
+            return config.get_config()
+        except EnvConfiguration.DoesNotExist:
+            return {}

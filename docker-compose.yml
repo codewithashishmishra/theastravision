@@ -1,0 +1,119 @@
+version: '3.8'
+
+services:
+  db:
+    image: postgres:15-alpine
+    environment:
+      POSTGRES_DB: aastraahr_prod
+      POSTGRES_USER: aastraa_admin
+      POSTGRES_PASSWORD: secure_password_here
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U aastraa_admin -d aastraahr_prod"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+    restart: unless-stopped
+    volumes:
+      - redis_data:/data
+
+  api:
+    build:
+      context: ./apps/api
+      dockerfile: Dockerfile
+    command: >
+      sh -c "python manage.py migrate && 
+             gunicorn config.wsgi:application --bind 0.0.0.0:8000"
+    volumes:
+      - ./apps/api:/app
+      - tracker_media:/app/media
+    ports:
+      - "8000:8000"
+    environment:
+      - DEBUG=0
+      - DATABASE_URL=postgres://aastraa_admin:secure_password_here@db:5432/aastraahr_prod
+      - REDIS_URL=redis://redis:6379/0
+      - ALLOWED_HOSTS=*
+      - CORS_ALLOWED_ORIGINS=http://localhost:3000
+      - AI_SERVICE_BASE_URL=http://ai-service:8001
+      - FRONTEND_APP_URL=http://localhost:3000
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_started
+    restart: unless-stopped
+
+  ai-service:
+    build:
+      context: ./apps/ai-service
+      dockerfile: Dockerfile
+    ports:
+      - "8001:8001"
+    environment:
+      - OPENAI_API_KEY=${OPENAI_API_KEY:-}
+      - OPENAI_MODEL=gpt-5.4-mini
+      - OPENAI_TTS_MODEL=tts-1
+      - OPENAI_TTS_VOICE=nova
+      - OPENAI_STT_MODEL=whisper-1
+    restart: unless-stopped
+
+  celery-worker:
+    build:
+      context: ./apps/api
+      dockerfile: Dockerfile
+    command: celery -A config worker -l info
+    volumes:
+      - ./apps/api:/app
+      - tracker_media:/app/media
+    environment:
+      - DATABASE_URL=postgres://aastraa_admin:secure_password_here@db:5432/aastraahr_prod
+      - REDIS_URL=redis://redis:6379/0
+      - ALLOW_S3=False
+      - AI_SERVICE_BASE_URL=http://ai-service:8001
+      - FRONTEND_APP_URL=http://localhost:3000
+    depends_on:
+      - api
+      - redis
+    restart: unless-stopped
+
+  celery-beat:
+    build:
+      context: ./apps/api
+      dockerfile: Dockerfile
+    command: celery -A config beat -l info
+    volumes:
+      - ./apps/api:/app
+    environment:
+      - DATABASE_URL=postgres://aastraa_admin:secure_password_here@db:5432/aastraahr_prod
+      - REDIS_URL=redis://redis:6379/0
+    depends_on:
+      - celery-worker
+    restart: unless-stopped
+
+  admin-web:
+    build:
+      context: ./apps/admin-web
+      dockerfile: Dockerfile
+    ports:
+      - "3000:3000"
+    environment:
+      - NEXT_PUBLIC_API_URL=http://localhost:8000/api/v1
+      - NEXT_PUBLIC_APP_URL=http://localhost:3000
+    depends_on:
+      - api
+    restart: unless-stopped
+
+volumes:
+  postgres_data:
+  redis_data:
+  tracker_media:

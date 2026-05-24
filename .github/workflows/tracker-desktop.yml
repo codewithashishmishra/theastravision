@@ -1,0 +1,29 @@
+name: Build Tracker Desktop
+
+on:
+  push:
+    tags:
+      - 'tracker-v*'
+  workflow_dispatch:
+
+jobs:
+  build:
+    strategy:
+      matrix:
+        os: [windows-latest, macos-latest, ubuntu-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install dependencies
+        run: |
+          pip install -r apps/tracker-desktop/requirements.txt pyinstaller
+      - name: Build executable
+        working-directory: apps/tracker-desktop
+        run: pyinstaller --onefile --windowed --name AastraaTracker main.py
+      - uses: actions/upload-artifact@v4
+        with:
+          name: AastraaTracker-${{ matrix.os }}
+          path: apps/tracker-desktop/dist/
