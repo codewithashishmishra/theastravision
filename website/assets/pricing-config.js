@@ -1,4 +1,4 @@
-/** AASTRAA HRMS regional pricing — source: PRODUCTION.md */
+/** AASTRAA HRMS regional pricing — aligned with docs/PRODUCTION_MONTHLY_COSTING.md */
 const ANNUAL_DISCOUNT = 0.1;
 
 const PLAN_IDS = ['starter', 'professional', 'enterprise'];
@@ -9,6 +9,14 @@ const PLAN_LABELS = {
   enterprise: 'Enterprise',
 };
 
+/** Shown in comparison table & plan footnotes (region-specific overage in modelHint where needed) */
+const AI_CREDIT_OVERAGE = {
+  IN: '₹2 per credit',
+  US: '$0.025 per credit',
+  CA: 'C$0.03 per credit',
+  GL: '$0.025 per credit',
+};
+
 const PRICING = {
   IN: {
     id: 'IN',
@@ -17,11 +25,12 @@ const PRICING = {
     currency: 'INR',
     symbol: '₹',
     model: 'flat',
-    modelHint: 'Flat monthly fee includes your first 100 users. Additional users billed per month as shown on each plan.',
+    modelHint:
+      'Flat monthly fee includes your first 100 users. Additional users billed per month. AI usage is metered in monthly credits; top-up packs and per-credit overage available.',
     plans: {
-      starter: { monthly: 8000, overage: 100, name: 'Starter' },
-      professional: { monthly: 12000, overage: 70, name: 'Professional' },
-      enterprise: { monthly: 18000, overage: 50, name: 'Enterprise' },
+      starter: { monthly: 8999, overage: 120, name: 'Starter', aiCredits: 200 },
+      professional: { monthly: 12999, overage: 75, name: 'Professional', aiCredits: 1000 },
+      enterprise: { monthly: 24999, overage: 60, name: 'Enterprise', aiCredits: 3000 },
     },
   },
   US: {
@@ -31,11 +40,12 @@ const PRICING = {
     currency: 'USD',
     symbol: '$',
     model: 'perUser',
-    modelHint: 'Per active user per month. Scale seats up or down anytime.',
+    modelHint:
+      'Per active user per month. AI features use a shared monthly credit pool per organization; credit packs available for heavy hiring.',
     plans: {
-      starter: { monthly: 5, name: 'Starter' },
-      professional: { monthly: 12, name: 'Professional' },
-      enterprise: { monthly: 18, name: 'Enterprise' },
+      starter: { monthly: 6, name: 'Starter', aiCredits: 200 },
+      professional: { monthly: 14, name: 'Professional', aiCredits: 1000 },
+      enterprise: { monthly: 22, name: 'Enterprise', aiCredits: 3000 },
     },
   },
   CA: {
@@ -45,11 +55,12 @@ const PRICING = {
     currency: 'CAD',
     symbol: 'C$',
     model: 'perUser',
-    modelHint: 'Per active user per month. CPP, EI & T4 compliance.',
+    modelHint:
+      'Per active user per month. CPP, EI & T4 compliance. AI credits included per plan with optional top-up packs.',
     plans: {
-      starter: { monthly: 6, name: 'Starter' },
-      professional: { monthly: 14, name: 'Professional' },
-      enterprise: { monthly: 20, name: 'Enterprise' },
+      starter: { monthly: 7, name: 'Starter', aiCredits: 200 },
+      professional: { monthly: 15, name: 'Professional', aiCredits: 1000 },
+      enterprise: { monthly: 23, name: 'Enterprise', aiCredits: 3000 },
     },
   },
   GL: {
@@ -59,11 +70,12 @@ const PRICING = {
     currency: 'USD',
     symbol: '$',
     model: 'perUser',
-    modelHint: 'International billing in USD. Per active user per month.',
+    modelHint:
+      'International billing in USD. Per active user per month. AI credits reset monthly; purchase add-on packs when you need more.',
     plans: {
-      starter: { monthly: 5, name: 'Starter' },
-      professional: { monthly: 12, name: 'Professional' },
-      enterprise: { monthly: 18, name: 'Enterprise' },
+      starter: { monthly: 6, name: 'Starter', aiCredits: 200 },
+      professional: { monthly: 14, name: 'Professional', aiCredits: 1000 },
+      enterprise: { monthly: 22, name: 'Enterprise', aiCredits: 3000 },
     },
   },
 };
@@ -76,10 +88,22 @@ const ADDONS = [
     description:
       'Greenhouse-style hosted careers page plus an embeddable job board for your website. Applications flow into your ATS pipeline.',
     pricing: {
-      IN: { monthly: 2000, currency: 'INR' },
-      US: { monthly: 5, currency: 'USD' },
-      CA: { monthly: 5, currency: 'CAD' },
-      GL: { monthly: 5, currency: 'USD' },
+      IN: { monthly: 2499, currency: 'INR' },
+      US: { monthly: 7, currency: 'USD' },
+      CA: { monthly: 7, currency: 'CAD' },
+      GL: { monthly: 7, currency: 'USD' },
+    },
+  },
+  {
+    id: 'ai_credits',
+    name: 'AI Credit Pack',
+    description:
+      '500 additional AI credits per month for voice/video interviews, resume parsing, and the HR chatbot. Stacks with your plan allowance.',
+    pricing: {
+      IN: { monthly: 1999, currency: 'INR' },
+      US: { monthly: 25, currency: 'USD' },
+      CA: { monthly: 25, currency: 'CAD' },
+      GL: { monthly: 25, currency: 'USD' },
     },
   },
 ];
@@ -105,11 +129,13 @@ const COMPARISON_ROWS = [
   { label: 'Leave, shifts & overtime', values: [true, true, true] },
   { label: 'Recruitment ATS & candidate pipeline', values: [true, true, true] },
   { label: 'AI resume parsing & match scores', values: [false, true, true] },
-  { label: 'AI voice & video interviews / year', values: ['10', '50', 'Unlimited'] },
+  { label: 'Monthly AI credits included', values: ['200', '1,000', '3,000'] },
+  { label: 'AI voice & video interviews (uses credits)', values: [false, true, true] },
   { label: 'WFH desktop tracker & sessions', values: [false, true, true] },
   { label: 'Policy-based screenshot capture (WFH)', values: [false, true, true] },
   { label: 'Payroll processing speed', values: ['24 hours', '10 hours', 'Instant'] },
-  { label: 'AI HR helpdesk chatbot', values: [true, true, true] },
+  { label: 'AI HR helpdesk chatbot (uses credits)', values: [true, true, true] },
+  { label: 'AI credit top-up packs', values: ['Available', 'Available', 'Available'] },
   { label: 'Support tier', values: ['24/7 AI', '24/7 Human + AI', 'VIP manager'] },
   { label: 'Expense, claims & reimbursements', values: [false, true, true] },
   { label: 'HR / IT helpdesk ticketing', values: [false, true, true] },
@@ -199,7 +225,9 @@ function getPlanPriceDisplay(regionId, planId, billing) {
       period: '/mo',
       note: '',
       strikethrough: '',
-      overageHtml: `Covers first 100 users<br><span class="font-normal text-xs opacity-80">+ ${sym}${plan.overage} per additional user</span>`,
+      overageHtml: plan.overage
+        ? `Covers first 100 users<br><span class="font-normal text-xs opacity-80">+ ${sym}${plan.overage} per additional user</span>`
+        : '',
     };
   }
 
@@ -227,6 +255,39 @@ function detectDefaultRegion() {
   return 'GL';
 }
 
+/** Short cross-region line under each plan card */
+function getPlanIntlReference(activeRegionId, planId, billing) {
+  const parts = [];
+  if (activeRegionId !== 'IN') {
+    const inD = getPlanPriceDisplay('IN', planId, billing);
+    parts.push(`India ${inD.main}${inD.period} (100 users)`);
+  }
+  if (activeRegionId !== 'US' && activeRegionId !== 'GL') {
+    const usD = getPlanPriceDisplay('US', planId, billing);
+    parts.push(`US ${usD.main}${usD.period}`);
+  }
+  if (activeRegionId !== 'CA') {
+    const caD = getPlanPriceDisplay('CA', planId, billing);
+    parts.push(`Canada ${caD.main}${caD.period}`);
+  }
+  if (!parts.length) return '';
+  return parts.join(' · ');
+}
+
+function getAddonIntlReference(activeRegionId, addonId) {
+  const regions = ['IN', 'US', 'CA'];
+  const parts = regions
+    .filter((r) => r !== activeRegionId)
+    .map((r) => {
+      const d = getAddonPriceDisplay(r, addonId);
+      if (!d) return '';
+      const label = r === 'IN' ? 'India' : r === 'US' ? 'US' : 'Canada';
+      return `${label} ${d.main}${d.period}`;
+    })
+    .filter(Boolean);
+  return parts.join(' · ');
+}
+
 if (typeof window !== 'undefined') {
   window.AASTRAA_PRICING = {
     ANNUAL_DISCOUNT,
@@ -236,11 +297,14 @@ if (typeof window !== 'undefined') {
     ADDONS,
     COMPARISON_ROWS,
     REGION_COMPLIANCE,
+    AI_CREDIT_OVERAGE,
     formatMoney,
     getAddonPriceDisplay,
     monthlyAfterAnnualDiscount,
     annualTotal,
     getPlanPriceDisplay,
+    getPlanIntlReference,
+    getAddonIntlReference,
     detectDefaultRegion,
   };
 }

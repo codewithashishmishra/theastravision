@@ -49,7 +49,7 @@ const HR_FAQS = [
   { q: 'Can we define custom leave types?', a: 'Yes. Casual, sick, maternity, comp-off, LWP, and custom accrual policies are supported.' },
   { q: 'How are holidays configured?', a: 'Company-wide and location-specific mandatory and optional holiday calendars are supported.' },
   { q: 'Does it support Internal Job Postings (IJP)?', a: 'Yes. Roles can be published internally before external career pages.' },
-  { q: 'What is the Job Portal add-on?', a: 'An optional module (₹2,000/mo in India, $5/mo elsewhere) with a hosted careers site and embeddable job board SDK. HR publishes jobs; candidates apply into your ATS pipeline.' },
+  { q: 'What is the Job Portal add-on?', a: 'An optional module (₹2,499/mo in India, $7/mo US, C$7/mo Canada) with a hosted careers site and embeddable job board SDK. HR publishes jobs; candidates apply into your ATS pipeline.' },
   { q: 'Can we conduct employee sentiment surveys?', a: 'Yes. Pulse surveys, anonymous feedback, and mood trackers measure engagement.' },
   { q: 'How accurate is mobile GPS attendance?', a: 'Native coordinates are validated against geo-fences; punches outside the radius are blocked or flagged per policy.' },
   { q: 'What happens if an employee misses a punch-out?', a: 'Alerts fire, anomalies are flagged, and regularization can be submitted for approval.' },

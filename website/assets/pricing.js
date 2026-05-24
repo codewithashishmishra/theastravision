@@ -1,4 +1,9 @@
 (function () {
+  if (!window.AASTRAA_PRICING) {
+    console.warn('AASTRAA pricing: pricing-config.js did not load — showing static prices only.');
+    return;
+  }
+
   const {
     PRICING,
     PLAN_IDS,
@@ -6,8 +11,11 @@
     ADDONS,
     COMPARISON_ROWS,
     REGION_COMPLIANCE,
+    AI_CREDIT_OVERAGE,
     getPlanPriceDisplay,
     getAddonPriceDisplay,
+    getPlanIntlReference,
+    getAddonIntlReference,
     detectDefaultRegion,
   } = window.AASTRAA_PRICING;
 
@@ -28,6 +36,9 @@
   const contactPlanBanner = document.getElementById('contact-plan-banner');
   const contactFormPanel = document.getElementById('contact-form-panel');
   const addonsContainer = document.getElementById('pricing-addons');
+  const aiCreditsFootnote = document.getElementById('pricing-ai-footnote');
+  const intlTbody = document.getElementById('pricing-intl-tbody');
+  const intlFootnote = document.getElementById('pricing-intl-footnote');
 
   let state = {
     region: detectDefaultRegion(),
@@ -160,12 +171,13 @@ Please schedule a demo and share onboarding steps for our organization. We would
     addonsContainer.innerHTML = ADDONS.map((addon) => {
       const display = getAddonPriceDisplay(state.region, addon.id);
       if (!display) return '';
+      const intl = getAddonIntlReference(state.region, addon.id);
       return `
       <article class="bg-white rounded-2xl border border-slate-200 p-6 shadow-material flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div class="flex-1">
           <h4 class="text-lg font-bold text-slate-900">${addon.name}</h4>
           <p class="text-sm text-slate-600 mt-1">${addon.description}</p>
-          <p class="text-xs text-slate-500 mt-2">${display.note}</p>
+          <p class="text-xs text-slate-500 mt-2">${display.note}${intl ? ` · ${intl}` : ''}</p>
         </div>
         <div class="text-right shrink-0">
           <span class="text-3xl font-black text-slate-900">${display.main}</span>
@@ -173,6 +185,30 @@ Please schedule a demo and share onboarding steps for our organization. We would
         </div>
       </article>`;
     }).join('');
+  }
+
+  function renderIntlMatrix() {
+    if (!intlTbody) return;
+    const billing = state.billing;
+    intlTbody.innerHTML = PLAN_IDS.map((planId) => {
+      const label = PLAN_LABELS[planId];
+      const inD = getPlanPriceDisplay('IN', planId, billing);
+      const usD = getPlanPriceDisplay('US', planId, billing);
+      const caD = getPlanPriceDisplay('CA', planId, billing);
+      const inCell = `${inD.main}${inD.period}`;
+      const usCell = `${usD.main}${usD.period}`;
+      const caCell = `${caD.main}${caD.period}`;
+      return `<tr class="border-b border-slate-100 last:border-0"><th scope="row" class="text-left py-2 pr-2 font-medium text-slate-900">${label}</th><td class="py-2 px-2 text-center">${inCell}</td><td class="py-2 px-2 text-center">${usCell}</td><td class="py-2 pl-2 text-center">${caCell}</td></tr>`;
+    }).join('');
+
+    if (intlFootnote) {
+      const job = getAddonPriceDisplay('IN', 'job_portal');
+      const jobUs = getAddonPriceDisplay('US', 'job_portal');
+      const jobCa = getAddonPriceDisplay('CA', 'job_portal');
+      const annualNote =
+        billing === 'annual' ? ' Prices shown with 10% annual discount.' : '';
+      intlFootnote.textContent = `India: flat fee includes first 100 users. US & Canada: per active user.${annualNote} Job Portal add-on: ${job.main} · ${jobUs.main} · ${jobCa.main}/mo.`;
+    }
   }
 
   function renderPlanCards() {
@@ -200,7 +236,15 @@ Please schedule a demo and share onboarding steps for our organization. We would
         overageEl.innerHTML = display.overageHtml;
         overageEl.classList.toggle('hidden', !display.overageHtml);
       }
+      const intlEl = card.querySelector('[data-price-intl]');
+      if (intlEl) {
+        const intl = getPlanIntlReference(state.region, planId, state.billing);
+        intlEl.textContent = intl;
+        intlEl.classList.toggle('hidden', !intl);
+      }
     });
+
+    renderIntlMatrix();
 
     if (modelHint) modelHint.textContent = region.modelHint;
     if (pricingIntro) {
@@ -211,6 +255,15 @@ Please schedule a demo and share onboarding steps for our organization. We would
     }
     if (pricingLive) {
       pricingLive.textContent = `${region.label} · ${state.billing === 'annual' ? 'Annual (10% off)' : 'Monthly'} pricing`;
+    }
+    if (aiCreditsFootnote) {
+      const overage = AI_CREDIT_OVERAGE[state.region] || AI_CREDIT_OVERAGE.GL;
+      aiCreditsFootnote.innerHTML =
+        '<strong>AI credits</strong> power the HR chatbot, resume parsing, and voice/video interviews. ' +
+        'Credits reset each billing month. Typical use: chat message ≈ 1 credit · resume parse ≈ 5 credits · ' +
+        'full AI interview ≈ 50 credits. Extra usage: <strong>' +
+        overage +
+        '</strong>, or add the <strong>AI Credit Pack</strong> below.';
     }
     document.documentElement.lang = region.lang;
     if (contactRegion) contactRegion.value = state.region;
@@ -347,11 +400,19 @@ Please schedule a demo and share onboarding steps for our organization. We would
     renderComparison();
   }
 
-  loadPrefs();
-  syncControls();
-  renderPlanCards();
-  renderComparison();
-  bindPlanCtaButtons(document);
+  function initPricing() {
+    loadPrefs();
+    syncControls();
+    renderPlanCards();
+    renderComparison();
+    bindPlanCtaButtons(document);
+  }
+
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', initPricing);
+  } else {
+    initPricing();
+  }
 
   if (regionSelect) {
     regionSelect.addEventListener('change', (e) => setRegion(e.target.value));
