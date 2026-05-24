@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react';
 import { Card, CardBody, Chip, Table, TableBody, TableCell, TableColumn, TableHeader, TableRow } from '@nextui-org/react';
 import { wfhApi } from '@/lib/wfhApi';
+import { formatRegionalDateTime } from '@/lib/formatDateTime';
 
 export default function TrackerDevicesPage() {
   const [devices, setDevices] = useState<Record<string, string>[]>([]);
@@ -32,7 +33,7 @@ export default function TrackerDevicesPage() {
                     {d.os_name} {d.os_version}
                   </TableCell>
                   <TableCell>{d.app_version}</TableCell>
-                  <TableCell>{d.last_seen_at ? new Date(d.last_seen_at).toLocaleString() : '—'}</TableCell>
+                  <TableCell>{d.last_seen_at ? formatRegionalDateTime(d.last_seen_at) : '—'}</TableCell>
                   <TableCell>
                     <Chip size="sm" color={d.is_trusted ? 'success' : 'warning'}>
                       {d.is_trusted ? 'Trusted' : 'Untrusted'}

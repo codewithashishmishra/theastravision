@@ -2,11 +2,15 @@ from django.conf import settings
 from django.conf.urls.static import static
 from django.contrib import admin
 from django.urls import path, include
-from rest_framework_simplejwt.views import TokenObtainPairView, TokenRefreshView
-from drf_spectacular.views import SpectacularAPIView, SpectacularRedocView, SpectacularSwaggerView
 from rest_framework.routers import DefaultRouter
 
-from core.views import TenantViewSet, UserViewSet, RoleViewSet, PermissionViewSet, UserRoleMappingViewSet, EnvConfigurationViewSet, FeatureFlagViewSet
+from config.schema_views import (
+    ProtectedSpectacularAPIView,
+    ProtectedSpectacularRedocView,
+    ProtectedSpectacularSwaggerView,
+)
+
+from core.views import TenantViewSet, UserViewSet, RoleViewSet, PermissionViewSet, UserRoleMappingViewSet, EnvConfigurationViewSet, FeatureFlagViewSet, EnvFileView
 from core.addon_views import TenantAddonViewSet
 from organization.views import (
     CompanyProfileViewSet, LegalEntityViewSet, BranchViewSet, DepartmentViewSet, DesignationViewSet, 
@@ -14,6 +18,7 @@ from organization.views import (
     CompanyCalendarViewSet, HolidayViewSet, EmployeeCodeSequenceViewSet
 )
 from core import auth_views, mfa_views, passkey_views, monitoring_views
+from core.e2ee.views import E2EEHandshakeView, InternalE2EESessionKeyView, InternalE2EESessionView
 
 router = DefaultRouter()
 
@@ -43,6 +48,10 @@ router.register(r'employee-code-sequences', EmployeeCodeSequenceViewSet, basenam
 urlpatterns = [
     path('admin/', admin.site.urls),
     
+    path('api/v1/public/e2ee/handshake/', E2EEHandshakeView.as_view()),
+    path('api/v1/internal/e2ee/session/<str:session_id>/', InternalE2EESessionView.as_view()),
+    path('api/v1/internal/e2ee/session/<str:session_id>/key/', InternalE2EESessionKeyView.as_view()),
+
     # Advanced Multi-Auth Endpoints
     path('api/v1/auth/login/password/', auth_views.LoginPasswordView.as_view()),
     path('api/v1/auth/me/', auth_views.MeView.as_view()),
@@ -65,6 +74,7 @@ urlpatterns = [
     
     # Platform Monitoring & cooldown status
     path('api/v1/platform/status/', monitoring_views.PlatformStatusView.as_view()),
+    path('api/v1/platform/frontend-debug-log/', monitoring_views.FrontendDebugLogView.as_view()),
     path('api/v1/platform/monitoring/', monitoring_views.PlatformMonitoringView.as_view()),
     path('api/v1/platform/metrics/', monitoring_views.PlatformMetricsView.as_view()),
     path('api/v1/platform/services/', monitoring_views.PlatformServicesView.as_view()),
@@ -72,11 +82,9 @@ urlpatterns = [
     path('api/v1/platform/system-logs/export/', monitoring_views.PlatformSystemLogsExportView.as_view()),
     path('api/v1/audit/', include('core.audit_urls')),
     
-    # Original Legacy simplejwt fallback
-    path('api/v1/auth/token/', TokenObtainPairView.as_view(), name='token_obtain_pair'),
-    
     # API endpoints
     path('api/v1/', include(router.urls)),
+    path('api/v1/config/env-file/', EnvFileView.as_view(), name='env-file'),
     path('api/v1/employees/', include('employees.urls')),
     path('api/v1/attendance/', include('attendance.urls')),
     path('api/v1/leave/', include('leave.urls')),
@@ -97,12 +105,14 @@ urlpatterns = [
     path('api/v1/offboarding/', include('offboarding.urls')),
     path('api/v1/dashboards/', include('dashboards.urls')),
     path('api/v1/cold-campaigns/', include('cold_campaign.urls')),
-    
-    # OpenAPI Schema
-    path('api/schema/', SpectacularAPIView.as_view(), name='schema'),
-    path('api/schema/swagger-ui/', SpectacularSwaggerView.as_view(url_name='schema'), name='swagger-ui'),
-    path('api/schema/redoc/', SpectacularRedocView.as_view(url_name='schema'), name='redoc'),
 ]
+
+if settings.OPENAPI_ENABLED:
+    urlpatterns += [
+        path('api/schema/', ProtectedSpectacularAPIView.as_view(), name='schema'),
+        path('api/schema/swagger-ui/', ProtectedSpectacularSwaggerView.as_view(url_name='schema'), name='swagger-ui'),
+        path('api/schema/redoc/', ProtectedSpectacularRedocView.as_view(url_name='schema'), name='redoc'),
+    ]
 
 if settings.DEBUG:
     urlpatterns += static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)

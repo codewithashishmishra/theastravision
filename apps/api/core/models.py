@@ -19,6 +19,19 @@ class Tenant(models.Model):
         blank=True,
         help_text="Payroll jurisdictions enabled for this tenant: IN, US, CA",
     )
+    
+    PLAN_CHOICES = [
+        ('starter', 'Starter'),
+        ('professional', 'Professional'),
+        ('enterprise', 'Enterprise'),
+    ]
+    subscription_plan = models.CharField(
+        max_length=20, 
+        choices=PLAN_CHOICES, 
+        default='starter',
+        help_text="Tenant's active subscription plan"
+    )
+    
     default_currency = models.CharField(max_length=3, default='INR')
     fiscal_year_start_month = models.IntegerField(default=4)
     variable_pay_enabled = models.BooleanField(

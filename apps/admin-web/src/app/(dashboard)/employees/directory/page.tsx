@@ -1,6 +1,7 @@
 'use client';
 
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
+import { useSearchParams } from 'next/navigation';
 import { 
   Table, TableHeader, TableColumn, TableBody, TableRow, TableCell, 
   User, Chip, Button, Input, DropdownTrigger, Dropdown, DropdownMenu, 
@@ -11,6 +12,7 @@ import { Plus, Search, MoreVertical, Edit, Trash2, Eye, User as UserIcon } from 
 import { useQuery, useMutation, useQueryClient, keepPreviousData } from '@tanstack/react-query';
 import api from '@/lib/axios';
 import { motion } from 'framer-motion';
+import { unwrapList } from '@/lib/hrmsApi';
 
 const API_URL = '/employees/employees/';
 
@@ -30,6 +32,7 @@ const statusColorMap: Record<string, "success" | "danger" | "warning"> = {
 };
 
 export default function EmployeeDirectoryPage() {
+  const searchParams = useSearchParams();
   const queryClient = useQueryClient();
   const [filterValue, setFilterValue] = useState("");
   const [page, setPage] = useState(1);
@@ -50,8 +53,12 @@ export default function EmployeeDirectoryPage() {
     gender: 'Male',
     date_of_joining: '',
     status: 'Active',
-    avatar_url: ''
+    avatar_url: '',
+    employee_type: '',
+    branch: '',
+    reporting_manager: '',
   });
+  const [saveError, setSaveError] = useState('');
 
   // Query
   const { data, isLoading, isFetching } = useQuery({
@@ -68,6 +75,26 @@ export default function EmployeeDirectoryPage() {
       return res.data;
     }
   });
+  const { data: employeeTypesData } = useQuery({
+    queryKey: ['employee-types-for-employee-form'],
+    queryFn: async () => (await api.get('/employees/employee-types/')).data,
+  });
+  const { data: branchesData } = useQuery({
+    queryKey: ['branches-for-employee-form'],
+    queryFn: async () => (await api.get('/branches/')).data,
+  });
+  const { data: managerOptionsData } = useQuery({
+    queryKey: ['employees-manager-options'],
+    queryFn: async () =>
+      (await api.get(API_URL, { params: { page_size: 500, status: 'Active' } })).data,
+  });
+  const employeeTypes = unwrapList<any>(employeeTypesData ?? []);
+  const branches = unwrapList<any>(branchesData ?? []);
+  const managerOptions = unwrapList<any>(managerOptionsData ?? []).filter(
+    (e: { id: string }) => !selectedEmployee || String(e.id) !== String(selectedEmployee.id)
+  );
+  const tenantHasEmployees =
+    (managerOptionsData?.count ?? 0) > 0 || managerOptions.length > 0;
 
   // Mutations
   const createMutation = useMutation({
@@ -108,7 +135,10 @@ export default function EmployeeDirectoryPage() {
         gender: employee.gender || 'Male',
         date_of_joining: employee.date_of_joining || '',
         status: employee.status || 'Active',
-        avatar_url: employee.avatar_url || ''
+        avatar_url: employee.avatar_url || '',
+        employee_type: employee.employee_type || '',
+        branch: employee.branch || '',
+        reporting_manager: employee.reporting_manager ? String(employee.reporting_manager) : '',
       });
     } else {
       setFormData({ 
@@ -118,20 +148,84 @@ export default function EmployeeDirectoryPage() {
         gender: 'Male', 
         date_of_joining: new Date().toISOString().split('T')[0], 
         status: 'Active',
-        avatar_url: ''
+        avatar_url: '',
+        employee_type: '',
+        branch: '',
+        reporting_manager: '',
       });
     }
+    setSaveError('');
     onOpen();
   };
 
+  useEffect(() => {
+    if (searchParams.get('action') === 'create') {
+      handleOpenModal('create');
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [searchParams]);
+
+  const managerLabel = (emp: {
+    first_name: string;
+    last_name: string;
+    employee_code: string;
+    designation_name?: string;
+  }) => {
+    const desig = emp.designation_name ? ` — ${emp.designation_name}` : '';
+    return `${emp.first_name} ${emp.last_name} (${emp.employee_code})${desig}`;
+  };
+
+  const buildPayload = () => {
+    const payload: Record<string, unknown> = {
+      employee_code: formData.employee_code,
+      first_name: formData.first_name,
+      last_name: formData.last_name,
+      gender: formData.gender,
+      date_of_joining: formData.date_of_joining,
+      status: formData.status,
+      employee_type: formData.employee_type || null,
+      branch: formData.branch || null,
+    };
+    if (formData.reporting_manager) {
+      payload.reporting_manager = formData.reporting_manager;
+    } else if (tenantHasEmployees && modalMode !== 'view') {
+      payload.reporting_manager = null;
+    }
+    return payload;
+  };
+
   const handleSave = () => {
-    // For MVP Create without linking to a full User model, we might just pass data.
-    // If backend requires `user` ID, creating via this API directly might fail unless we make `user` optional.
-    // Assuming backend is resilient or we are editing for now.
+    if (!formData.employee_type) {
+      return;
+    }
+    if (tenantHasEmployees && !formData.reporting_manager && modalMode === 'create') {
+      setSaveError('Reporting manager is required.');
+      return;
+    }
+    setSaveError('');
+    const payload = buildPayload();
     if (modalMode === 'create') {
-      createMutation.mutate(formData);
+      createMutation.mutate(payload, {
+        onError: (err: { response?: { data?: Record<string, string | string[]> } }) => {
+          const data = err.response?.data;
+          const msg =
+            (typeof data?.reporting_manager === 'string' ? data.reporting_manager : null) ||
+            (Array.isArray(data?.reporting_manager) ? data.reporting_manager[0] : null) ||
+            'Failed to save employee.';
+          setSaveError(msg);
+        },
+      });
     } else if (modalMode === 'edit') {
-      updateMutation.mutate(formData);
+      updateMutation.mutate(payload, {
+        onError: (err: { response?: { data?: Record<string, string | string[]> } }) => {
+          const data = err.response?.data;
+          const msg =
+            (typeof data?.reporting_manager === 'string' ? data.reporting_manager : null) ||
+            (Array.isArray(data?.reporting_manager) ? data.reporting_manager[0] : null) ||
+            'Failed to update employee.';
+          setSaveError(msg);
+        },
+      });
     }
   };
 
@@ -437,7 +531,77 @@ export default function EmployeeDirectoryPage() {
                     onChange={(e) => setFormData({...formData, avatar_url: e.target.value})}
                     isReadOnly={modalMode === 'view'}
                   />
+                  <Select
+                    label="Employee Type"
+                    variant="bordered"
+                    selectedKeys={formData.employee_type ? [String(formData.employee_type)] : []}
+                    onChange={(e) => setFormData({...formData, employee_type: e.target.value})}
+                    isDisabled={modalMode === 'view'}
+                    isRequired
+                  >
+                    {employeeTypes.map((t: any) => (
+                      <SelectItem key={String(t.id)} value={String(t.id)}>{t.name}</SelectItem>
+                    ))}
+                  </Select>
+                  <Select
+                    label="Branch"
+                    variant="bordered"
+                    selectedKeys={formData.branch ? [String(formData.branch)] : []}
+                    onChange={(e) => setFormData({...formData, branch: e.target.value})}
+                    isDisabled={modalMode === 'view'}
+                  >
+                    {branches.map((b: any) => (
+                      <SelectItem key={String(b.id)} value={String(b.id)}>
+                        {b.name} {(!b.latitude || !b.longitude) ? '(Missing office coordinates)' : ''}
+                      </SelectItem>
+                    ))}
+                  </Select>
+                  {modalMode === 'view' ? (
+                    <Input
+                      label="Reporting manager"
+                      variant="bordered"
+                      value={
+                        selectedEmployee?.reporting_manager_name ||
+                        (tenantHasEmployees ? '—' : 'Root (no manager)')
+                      }
+                      isReadOnly
+                      className="col-span-2"
+                    />
+                  ) : (
+                    <Select
+                      label="Reporting manager"
+                      variant="bordered"
+                      description={
+                        tenantHasEmployees
+                          ? 'Required for all employees except the first root executive'
+                          : 'Optional for the first employee in the organization'
+                      }
+                      selectedKeys={
+                        formData.reporting_manager ? [String(formData.reporting_manager)] : []
+                      }
+                      onChange={(e) =>
+                        setFormData({ ...formData, reporting_manager: e.target.value })
+                      }
+                      isRequired={tenantHasEmployees}
+                      className="col-span-2"
+                    >
+                      {managerOptions.map((emp: {
+                        id: string;
+                        first_name: string;
+                        last_name: string;
+                        employee_code: string;
+                        designation_name?: string;
+                      }) => (
+                        <SelectItem key={String(emp.id)} value={String(emp.id)}>
+                          {managerLabel(emp)}
+                        </SelectItem>
+                      ))}
+                    </Select>
+                  )}
                 </div>
+                {saveError && (
+                  <p className="text-sm text-danger mt-2">{saveError}</p>
+                )}
               </ModalBody>
               <ModalFooter>
                 <Button color="danger" variant="light" onPress={onClose}>
@@ -448,6 +612,10 @@ export default function EmployeeDirectoryPage() {
                     color="primary" 
                     onPress={handleSave} 
                     isLoading={createMutation.isPending || updateMutation.isPending}
+                    isDisabled={
+                      !formData.employee_type ||
+                      (tenantHasEmployees && !formData.reporting_manager && modalMode === 'create')
+                    }
                   >
                     Save Changes
                   </Button>

@@ -9,6 +9,9 @@ app = Celery("aastraahr")
 app.config_from_object("django.conf:settings", namespace="CELERY")
 app.autodiscover_tasks()
 
+_debug = os.environ.get("DEBUG", "True").lower() in ("true", "1", "yes")
+_utilization_interval = 120.0 if _debug else 30.0
+
 app.conf.beat_schedule = {
     "close-stale-wfh-sessions": {
         "task": "wfh.tasks.close_stale_sessions",
@@ -28,11 +31,15 @@ app.conf.beat_schedule = {
     },
     "sample-platform-utilization": {
         "task": "core.tasks.sample_platform_utilization",
-        "schedule": 30.0,
+        "schedule": _utilization_interval,
     },
     "flush-clickhouse-log-buffer": {
         "task": "core.tasks.flush_clickhouse_log_buffer",
         "schedule": 30.0,
+    },
+    "purge-audit-logs": {
+        "task": "core.tasks.purge_audit_logs",
+        "schedule": crontab(hour=3, minute=30),
     },
     "cleanup-expired-ai-interviews": {
         "task": "recruitment.tasks.cleanup_expired_sessions",

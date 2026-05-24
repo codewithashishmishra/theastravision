@@ -3,16 +3,32 @@ from pathlib import Path
 from datetime import timedelta
 from dotenv import load_dotenv
 import dj_database_url
+from django.core.exceptions import ImproperlyConfigured
 
 load_dotenv()
 
 BASE_DIR = Path(__file__).resolve().parent.parent
 
-SECRET_KEY = os.environ.get("SECRET_KEY", "django-insecure-default-key-for-dev")
+_DEBUG_RAW = os.environ.get("DEBUG", "True").lower() in ["true", "1", "yes"]
+DEBUG = _DEBUG_RAW
 
-DEBUG = os.environ.get("DEBUG", "True").lower() in ["true", "1", "yes"]
+_SECRET_DEFAULT = "django-insecure-default-key-for-dev"
+SECRET_KEY = os.environ.get("SECRET_KEY", _SECRET_DEFAULT)
+if not DEBUG and SECRET_KEY == _SECRET_DEFAULT:
+    raise ImproperlyConfigured("SECRET_KEY must be set to a unique value when DEBUG=False.")
 
-ALLOWED_HOSTS = ["*"]
+_hosts_raw = os.environ.get("ALLOWED_HOSTS", "").strip()
+if _hosts_raw:
+    ALLOWED_HOSTS = [h.strip() for h in _hosts_raw.split(",") if h.strip()]
+elif DEBUG:
+    ALLOWED_HOSTS = ["localhost", "127.0.0.1", "[::1]"]
+else:
+    raise ImproperlyConfigured("ALLOWED_HOSTS must be set when DEBUG=False.")
+
+OPENAPI_ENABLED = os.environ.get(
+    "OPENAPI_ENABLED",
+    "true" if DEBUG else "false",
+).lower() in ["true", "1", "yes"]
 
 INSTALLED_APPS = [
     'daphne',
@@ -97,12 +113,20 @@ LOG_SERVICE_REGISTRY = {
 }
 
 CLICKHOUSE_ENABLED = os.environ.get("CLICKHOUSE_ENABLED", "False").lower() in ["true", "1", "yes"]
+# When False (default), audit/platform log APIs read from PostgreSQL (SystemAuditLog, AuthSession).
+# Set True only when ClickHouse is deployed; logs are mirrored asynchronously from PG writes.
 CLICKHOUSE_HOST = os.environ.get("CLICKHOUSE_HOST", "localhost")
 CLICKHOUSE_PORT = int(os.environ.get("CLICKHOUSE_PORT", "8123"))
 CLICKHOUSE_USER = os.environ.get("CLICKHOUSE_USER", "default")
 CLICKHOUSE_PASSWORD = os.environ.get("CLICKHOUSE_PASSWORD", "")
 CLICKHOUSE_DATABASE = os.environ.get("CLICKHOUSE_DATABASE", "default")
 CLICKHOUSE_BATCH_SIZE = int(os.environ.get("CLICKHOUSE_BATCH_SIZE", "5000"))
+
+REDIS_ALLOW = os.environ.get("REDIS_ALLOW", "False").lower() in ("true", "1", "yes")
+E2EE_ENABLED = os.environ.get("E2EE_ENABLED", "True").lower() in ("true", "1", "yes")
+E2EE_SESSION_TTL_SECONDS = int(os.environ.get("E2EE_SESSION_TTL_SECONDS", "604800"))
+E2EE_PUBLIC_SESSION_TTL_SECONDS = int(os.environ.get("E2EE_PUBLIC_SESSION_TTL_SECONDS", "900"))
+E2EE_INTERNAL_TOKEN = os.environ.get("E2EE_INTERNAL_TOKEN", "")
 
 MIDDLEWARE = [
     'corsheaders.middleware.CorsMiddleware',
@@ -112,9 +136,11 @@ MIDDLEWARE = [
     'django.middleware.common.CommonMiddleware',
     'django.middleware.csrf.CsrfViewMiddleware',
     'django.contrib.auth.middleware.AuthenticationMiddleware',
+    'core.middleware.timezone_middleware.TimezoneMiddleware',
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
     'simple_history.middleware.HistoryRequestMiddleware',
+    'core.middleware.e2ee_response_middleware.E2EEResponseMiddleware',
     'core.middleware.request_metrics_middleware.RequestMetricsMiddleware',
 ]
 
@@ -146,7 +172,10 @@ DATABASES = {
 
 AUTH_PASSWORD_VALIDATORS = [
     {'NAME': 'django.contrib.auth.password_validation.UserAttributeSimilarityValidator',},
-    {'NAME': 'django.contrib.auth.password_validation.MinimumLengthValidator',},
+    {
+        'NAME': 'django.contrib.auth.password_validation.MinimumLengthValidator',
+        'OPTIONS': {'min_length': int(os.environ.get('PASSWORD_MIN_LENGTH', '12' if not DEBUG else '8'))},
+    },
     {'NAME': 'django.contrib.auth.password_validation.CommonPasswordValidator',},
     {'NAME': 'django.contrib.auth.password_validation.NumericPasswordValidator',},
 ]
@@ -162,6 +191,16 @@ STATICFILES_DIRS = [BASE_DIR / 'static'] if (BASE_DIR / 'static').exists() else 
 MEDIA_URL = '/media/'
 MEDIA_ROOT = BASE_DIR / 'media'
 
+FRONTEND_DEBUG_LOG_PATH = Path(
+    os.environ.get('FRONTEND_DEBUG_LOG_PATH', str(BASE_DIR / 'debug.log'))
+)
+
+FILE_UPLOAD_MAX_MEMORY_SIZE = int(os.environ.get('FILE_UPLOAD_MAX_MEMORY_SIZE', str(5 * 1024 * 1024)))
+DATA_UPLOAD_MAX_MEMORY_SIZE = int(os.environ.get('DATA_UPLOAD_MAX_MEMORY_SIZE', str(10 * 1024 * 1024)))
+
+# Audit log retention (days); 0 = retain indefinitely
+AUDIT_LOG_RETENTION_DAYS = int(os.environ.get('AUDIT_LOG_RETENTION_DAYS', '180'))
+
 ALLOW_S3 = os.environ.get('ALLOW_S3', 'False').lower() in ['true', '1', 'yes']
 TRACKER_ENCRYPTION_KEY = os.environ.get('TRACKER_ENCRYPTION_KEY', '')
 TRACKER_MASTER_KEY = os.environ.get('TRACKER_MASTER_KEY', '')
@@ -173,7 +212,7 @@ AUTH_USER_MODEL = 'core.User'
 
 REST_FRAMEWORK = {
     'DEFAULT_AUTHENTICATION_CLASSES': (
-        'rest_framework_simplejwt.authentication.JWTAuthentication',
+        'core.authentication.TimezoneJWTAuthentication',
     ),
     'DEFAULT_PERMISSION_CLASSES': (
         'rest_framework.permissions.IsAuthenticated',
@@ -185,8 +224,8 @@ REST_FRAMEWORK = {
 }
 
 SIMPLE_JWT = {
-    'ACCESS_TOKEN_LIFETIME': timedelta(minutes=60),
-    'REFRESH_TOKEN_LIFETIME': timedelta(days=7),
+    'ACCESS_TOKEN_LIFETIME': timedelta(minutes=int(os.environ.get('JWT_ACCESS_MINUTES', '15'))),
+    'REFRESH_TOKEN_LIFETIME': timedelta(days=int(os.environ.get('JWT_REFRESH_DAYS', '7'))),
     'ROTATE_REFRESH_TOKENS': True,
     'BLACKLIST_AFTER_ROTATION': True,
     'AUTH_HEADER_TYPES': ('Bearer',),
@@ -205,7 +244,59 @@ CORS_ALLOWED_ORIGINS = [
     "http://localhost:3001",
     "http://127.0.0.1:3001",
 ]
+_extra_cors = os.environ.get("CORS_ALLOWED_ORIGINS", "")
+for _origin in _extra_cors.split(","):
+    _origin = _origin.strip()
+    if _origin and _origin not in CORS_ALLOWED_ORIGINS:
+        CORS_ALLOWED_ORIGINS.append(_origin)
+for _default_origin in (FRONTEND_APP_URL, CAREERS_APP_URL):
+    if _default_origin and _default_origin not in CORS_ALLOWED_ORIGINS:
+        CORS_ALLOWED_ORIGINS.append(_default_origin.rstrip("/"))
 CORS_ALLOW_CREDENTIALS = True
+CORS_ALLOW_HEADERS = [
+    "accept",
+    "accept-encoding",
+    "authorization",
+    "content-type",
+    "dnt",
+    "origin",
+    "user-agent",
+    "x-csrftoken",
+    "x-requested-with",
+    "x-e2ee-session",
+    "x-e2ee-seq",
+    "x-client-ecdh-public",
+    "x-internal-service",
+    "x-internal-service-token",
+]
+
+if not DEBUG:
+    SECURE_SSL_REDIRECT = os.environ.get("SECURE_SSL_REDIRECT", "True").lower() in ["true", "1", "yes"]
+    SECURE_HSTS_SECONDS = int(os.environ.get("SECURE_HSTS_SECONDS", "31536000"))
+    SECURE_HSTS_INCLUDE_SUBDOMAINS = True
+    SECURE_HSTS_PRELOAD = os.environ.get("SECURE_HSTS_PRELOAD", "True").lower() in ["true", "1", "yes"]
+    SECURE_CONTENT_TYPE_NOSNIFF = True
+    SECURE_REFERRER_POLICY = "strict-origin-when-cross-origin"
+    SESSION_COOKIE_SECURE = True
+    CSRF_COOKIE_SECURE = True
+    SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https")
+    X_FRAME_OPTIONS = "DENY"
+
+WEBAUTHN_RP_ID = os.environ.get("WEBAUTHN_RP_ID", "localhost")
+WEBAUTHN_RP_NAME = os.environ.get("WEBAUTHN_RP_NAME", "AastraaHR")
+WEBAUTHN_ORIGIN = os.environ.get("WEBAUTHN_ORIGIN", FRONTEND_APP_URL.rstrip("/"))
+
+PRIVILEGED_ROLES_REQUIRE_MFA = os.environ.get(
+    "PRIVILEGED_ROLES_REQUIRE_MFA", "True" if not DEBUG else "False"
+).lower() in ["true", "1", "yes"]
+PRIVILEGED_MFA_ROLE_NAMES = tuple(
+    r.strip()
+    for r in os.environ.get(
+        "PRIVILEGED_MFA_ROLE_NAMES",
+        "Super Admin,Company Admin,Payroll Admin,IT Admin",
+    ).split(",")
+    if r.strip()
+)
 # Celery Configuration Options
 CELERY_BROKER_URL = os.environ.get("REDIS_URL", "redis://localhost:6379/0")
 CELERY_RESULT_BACKEND = os.environ.get("REDIS_URL", "redis://localhost:6379/0")
@@ -217,4 +308,8 @@ CELERY_RESULT_SERIALIZER = "json"
 REST_FRAMEWORK['DEFAULT_THROTTLE_RATES'] = {
     'tracker_screenshot': '120/min',
     'tracker_login': '10/min',
+    'auth_login': '10/min',
+    'auth_refresh': '30/min',
+    'auth_mfa': '10/min',
+    'auth_face': '10/min',
 }

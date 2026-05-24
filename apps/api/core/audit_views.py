@@ -10,9 +10,12 @@ from rest_framework.views import APIView
 
 from core.auth_views import get_user_role_names
 from core.models import AuthSession, SystemAuditLog
+from core.audit import system_audit_log
 
 from core.audit_serializers import AuthSessionSerializer, SystemAuditLogSerializer
 from core.tenant_utils import resolve_tenant_id
+
+AUDIT_ADMIN_MODULES = ["iam", "auth", "config", "employees", "payroll", "audit"]
 
 
 def _is_super_admin(user):
@@ -168,10 +171,10 @@ class AdminActionsAuditView(APIView):
 
         if not request.query_params.get("tenant_id") and tenant_id:
             ch = fetch_logs_from_clickhouse(
-                request, log_type="audit", module_in=["iam", "auth", "config"], tenant_id=tenant_id
+                request, log_type="audit", module_in=AUDIT_ADMIN_MODULES, tenant_id=tenant_id
             )
         else:
-            ch = fetch_logs_from_clickhouse(request, log_type="audit", module_in=["iam", "auth", "config"])
+            ch = fetch_logs_from_clickhouse(request, log_type="audit", module_in=AUDIT_ADMIN_MODULES)
         if ch:
             rows, pagination = ch
             return Response({"results": rows, "pagination": pagination, "source": "clickhouse"})
@@ -179,7 +182,7 @@ class AdminActionsAuditView(APIView):
         qs = SystemAuditLog.objects.select_related("user", "tenant").order_by("-created_at")
         if tenant_id:
             qs = qs.filter(tenant_id=tenant_id)
-        qs = qs.filter(module__in=["iam", "auth", "config"])
+        qs = qs.filter(module__in=AUDIT_ADMIN_MODULES)
         qs = _filter_audit_logs(qs, request)
         page_qs, pagination = _paginate_queryset(qs, request)
         return Response({
@@ -251,7 +254,7 @@ class AuditExportView(APIView):
             qs = SystemAuditLog.objects.select_related("user", "tenant").order_by("-created_at")
             if tenant_id:
                 qs = qs.filter(tenant_id=tenant_id)
-            qs = qs.filter(module__in=["iam", "auth", "config"])
+            qs = qs.filter(module__in=AUDIT_ADMIN_MODULES)
             qs = _filter_audit_logs(qs, request)[:5000]
             rows = SystemAuditLogSerializer(qs, many=True).data
             filename = "admin-audit-logs"
@@ -267,6 +270,13 @@ class AuditExportView(APIView):
             filename = "login-sessions"
         else:
             return Response({"detail": "Invalid type."}, status=400)
+
+        system_audit_log(
+            request,
+            action="audit.export",
+            module="audit",
+            metadata={"export_type": export_type, "format": fmt, "row_count": len(rows)},
+        )
 
         if fmt == "json":
             return Response(rows)

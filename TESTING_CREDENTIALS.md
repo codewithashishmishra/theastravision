@@ -9,6 +9,10 @@ python manage.py seed_dev
 python manage.py seed_wfh
 ```
 
+### Application-layer E2EE (all JSON APIs)
+
+When `E2EE_ENABLED=True` (default), clients must complete `POST /api/v1/public/e2ee/handshake/` before any other JSON API call. The admin-web and careers-web apps handle this automatically. Session blobs are stored in PostgreSQL table `REDIS` when `REDIS_ALLOW=False` (default), or in Redis DB 2 when `REDIS_ALLOW=True`.
+
 ### Global / Platform Roles
 
 **Super Admin** (full system access, tenant creation, global analytics)

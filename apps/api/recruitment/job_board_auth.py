@@ -32,13 +32,12 @@ def verify_api_key(key: str, settings: TenantCareerPortalSettings) -> bool:
 
 
 class JobBoardApiKeyAuthentication(BaseAuthentication):
-    """Authenticate via X-Job-Board-Key header or ?key= query param."""
+    """Authenticate via X-Job-Board-Key header only (never query string)."""
 
     def authenticate(self, request):
         key = (
             request.headers.get('X-Job-Board-Key')
             or request.META.get('HTTP_X_JOB_BOARD_KEY')
-            or request.query_params.get('key')
         )
         if not key:
             raise AuthenticationFailed('Job board API key required.')

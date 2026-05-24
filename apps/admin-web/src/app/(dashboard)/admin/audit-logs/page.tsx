@@ -4,9 +4,10 @@ import { useCallback, useEffect, useState } from 'react';
 import { AuditLogTable } from '@/components/audit/AuditLogTable';
 import { wfhApi } from '@/lib/wfhApi';
 import type { AuditFilters } from '@/lib/auditApi';
+import { formatUtcDateTime } from '@/lib/formatDateTime';
 
 const columns = [
-  { key: 'created_at', label: 'Time', render: (row: Record<string, unknown>) => new Date(String(row.created_at)).toLocaleString() },
+  { key: 'created_at', label: 'Time', render: (row: Record<string, unknown>) => formatUtcDateTime(String(row.created_at)) },
   { key: 'action', label: 'Action' },
   { key: 'entity_type', label: 'Entity' },
   { key: 'ip_address', label: 'IP' },

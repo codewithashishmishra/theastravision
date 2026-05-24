@@ -11,9 +11,17 @@ import {
   SelectItem,
   Spinner,
 } from '@nextui-org/react';
-import { recruitmentApi } from '@/lib/hrmsApi';
+import { employeesApi, recruitmentApi, unwrapList } from '@/lib/hrmsApi';
 
 type Job = { id: string; title: string; match_threshold?: number; assessment_enabled?: boolean; auto_send_invite?: boolean };
+
+type ManagerOption = {
+  id: string;
+  first_name: string;
+  last_name: string;
+  employee_code: string;
+  designation_name?: string;
+};
 
 export default function NewCandidateInterviewPage() {
   const [jobs, setJobs] = useState<Job[]>([]);
@@ -29,19 +37,33 @@ export default function NewCandidateInterviewPage() {
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState('');
   const [sendEmail, setSendEmail] = useState(false);
+  const [managers, setManagers] = useState<ManagerOption[]>([]);
+  const [proposedManagerId, setProposedManagerId] = useState('');
 
   useEffect(() => {
     recruitmentApi.jobs.list().then((res) => {
       const list = res.data.results ?? res.data;
       setJobs(Array.isArray(list) ? list : []);
     });
+    employeesApi.list({ page_size: 500, status: 'Active' }).then((res) => {
+      setManagers(unwrapList<ManagerOption>(res.data));
+    });
   }, []);
+
+  const managerLabel = (emp: ManagerOption) => {
+    const desig = emp.designation_name ? ` — ${emp.designation_name}` : '';
+    return `${emp.first_name} ${emp.last_name} (${emp.employee_code})${desig}`;
+  };
 
   const selectedJob = jobs.find((j) => j.id === jobId);
 
   const handleCreate = async () => {
     if (!jobId || !resume) {
       setMessage('Select a job and upload a resume.');
+      return;
+    }
+    if (!proposedManagerId) {
+      setMessage('Select a future reporting manager.');
       return;
     }
     const ext = resume.name.toLowerCase();
@@ -56,6 +78,7 @@ export default function NewCandidateInterviewPage() {
     form.append('first_name', firstName);
     form.append('last_name', lastName);
     form.append('email', email);
+    form.append('proposed_reporting_manager', proposedManagerId);
     form.append('resume_file', resume);
     try {
       const res = await recruitmentApi.candidates.create(form);
@@ -105,8 +128,24 @@ export default function NewCandidateInterviewPage() {
             <Input label="Last name" value={lastName} onValueChange={setLastName} />
           </div>
           <Input label="Email" type="email" value={email} onValueChange={setEmail} />
+          <Select
+            label="Future reporting manager"
+            description="Required — assigned when the candidate is hired as an employee"
+            selectedKeys={proposedManagerId ? [proposedManagerId] : []}
+            onSelectionChange={(k) => setProposedManagerId(String(Array.from(k)[0] || ''))}
+            isRequired
+          >
+            {managers.map((emp) => (
+              <SelectItem key={emp.id}>{managerLabel(emp)}</SelectItem>
+            ))}
+          </Select>
           <Input type="file" label="Resume (PDF/DOCX)" accept=".pdf,.docx" onChange={(e) => setResume(e.target.files?.[0] ?? null)} />
-          <Button color="primary" isLoading={loading} onPress={handleCreate}>
+          <Button
+            color="primary"
+            isLoading={loading}
+            isDisabled={!proposedManagerId}
+            onPress={handleCreate}
+          >
             Upload & run AI match
           </Button>
         </CardBody>

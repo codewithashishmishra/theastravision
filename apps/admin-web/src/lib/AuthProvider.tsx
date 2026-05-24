@@ -5,10 +5,13 @@ import { useRouter } from 'next/navigation';
 import type { Role } from '@/config/menuConfig';
 import {
   AuthMeResponse,
+  bootstrapAuthSession,
   clearAuthSession,
   loadAndPersistAuthSession,
 } from '@/lib/authSession';
+import { getAccessToken } from '@/lib/tokenStore';
 import { parseUserRoles } from '@/lib/roleRouting';
+import { setDebugUserContext } from '@/lib/debugLogStore';
 
 type AuthContextValue = {
   isAuthReady: boolean;
@@ -30,23 +33,33 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [roles, setRoles] = useState<Role[]>(['Employee']);
 
   const refreshAuth = useCallback(async (): Promise<boolean> => {
-    const token = localStorage.getItem('access_token');
+    let token = getAccessToken();
     if (!token) {
-      clearAuthSession();
-      setIsAuthenticated(false);
-      setUser(null);
-      setPrimaryRole('Employee');
-      setRoles(['Employee']);
-      setIsAuthReady(true);
-      router.replace('/login');
-      return false;
+      const bootstrapped = await bootstrapAuthSession();
+      if (!bootstrapped) {
+        clearAuthSession();
+        setIsAuthenticated(false);
+        setUser(null);
+        setPrimaryRole('Employee');
+        setRoles(['Employee']);
+        setDebugUserContext({ email: '', roles: [] });
+        setIsAuthReady(true);
+        router.replace('/login');
+        return false;
+      }
+      token = getAccessToken();
     }
 
     try {
       const session = await loadAndPersistAuthSession();
+      const parsedRoles = parseUserRoles(session.user.roles);
       setUser(session.user);
       setPrimaryRole(session.primaryRole);
-      setRoles(parseUserRoles(session.user.roles));
+      setRoles(parsedRoles);
+      setDebugUserContext({
+        email: session.user.email ?? '',
+        roles: parsedRoles,
+      });
       setIsAuthenticated(true);
       setIsAuthReady(true);
       return true;
@@ -56,6 +69,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       setUser(null);
       setPrimaryRole('Employee');
       setRoles(['Employee']);
+      setDebugUserContext({ email: '', roles: [] });
       setIsAuthReady(true);
       router.replace('/login');
       return false;

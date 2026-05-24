@@ -11,7 +11,7 @@ from core.permissions import IsAuthenticatedTenantUser
 
 from core.models import Tenant
 from core.tenant_utils import attach_tenant_to_request, get_employee_for_user, resolve_request_tenant_id
-from organization.views import BaseTenantViewSet
+from organization.views import AuditedTenantViewSet
 
 from .models import (
     SalaryComponent,
@@ -36,19 +36,25 @@ from .tax_ai_service import generate_tax_tips
 from compliance.pdf_fill import pdf_from_text
 
 
-class SalaryComponentViewSet(BaseTenantViewSet):
+class SalaryComponentViewSet(AuditedTenantViewSet):
     queryset = SalaryComponent.objects.all()
     serializer_class = SalaryComponentSerializer
+    audit_module = "payroll"
+    audit_resource = "salary_component"
 
 
-class SalaryStructureViewSet(BaseTenantViewSet):
+class SalaryStructureViewSet(AuditedTenantViewSet):
     queryset = SalaryStructure.objects.select_related('employee').all()
     serializer_class = SalaryStructureSerializer
+    audit_module = "payroll"
+    audit_resource = "salary_structure"
 
 
-class PayrollRunViewSet(BaseTenantViewSet):
+class PayrollRunViewSet(AuditedTenantViewSet):
     queryset = PayrollRun.objects.all()
     serializer_class = PayrollRunSerializer
+    audit_module = "payroll"
+    audit_resource = "payroll_run"
 
     @action(detail=True, methods=['post'])
     def generate(self, request, pk=None):
@@ -140,9 +146,11 @@ class PayrollRunViewSet(BaseTenantViewSet):
         return response
 
 
-class PayslipViewSet(BaseTenantViewSet):
+class PayslipViewSet(AuditedTenantViewSet):
     queryset = Payslip.objects.select_related('payroll_run', 'employee').prefetch_related('line_items')
     serializer_class = PayslipSerializer
+    audit_module = "payroll"
+    audit_resource = "payslip"
 
     @action(detail=True, methods=['get'])
     def pdf(self, request, pk=None):
@@ -166,14 +174,18 @@ class PayslipViewSet(BaseTenantViewSet):
         return response
 
 
-class PayrollLineItemViewSet(BaseTenantViewSet):
+class PayrollLineItemViewSet(AuditedTenantViewSet):
     queryset = PayrollLineItem.objects.all()
     serializer_class = PayrollLineItemSerializer
+    audit_module = "payroll"
+    audit_resource = "payroll_line_item"
 
 
-class TaxDeclarationViewSet(BaseTenantViewSet):
+class TaxDeclarationViewSet(AuditedTenantViewSet):
     queryset = TaxDeclaration.objects.all()
     serializer_class = TaxDeclarationSerializer
+    audit_module = "payroll"
+    audit_resource = "tax_declaration"
 
     def get_queryset(self):
         qs = super().get_queryset()

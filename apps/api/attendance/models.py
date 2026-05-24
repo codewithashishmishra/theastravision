@@ -13,6 +13,10 @@ class AttendanceSettings(BaseTenantModel):
     require_selfie = models.BooleanField(default=False)
     allow_web_punch = models.BooleanField(default=True)
     allow_regularization = models.BooleanField(default=True)
+    work_start_time = models.TimeField(default='09:00')
+    work_end_time = models.TimeField(default='18:00')
+    work_days = models.JSONField(default=list)  # ISO weekday: 1=Mon .. 7=Sun
+    office_hours_timezone = models.CharField(max_length=100, default='UTC')
 
 
 class Shift(BaseTenantModel):
@@ -78,3 +82,27 @@ class AttendanceRegularization(BaseTenantModel):
     )
     approved_at = models.DateTimeField(null=True, blank=True)
     rejection_reason = models.TextField(blank=True, default='')
+
+
+class FieldLocationPing(BaseTenantModel):
+    employee = models.ForeignKey(Employee, on_delete=models.CASCADE, related_name='field_pings')
+    attendance_log = models.ForeignKey(
+        AttendanceLog, on_delete=models.CASCADE, related_name='field_pings', null=True, blank=True
+    )
+    recorded_at = models.DateTimeField(auto_now_add=True)
+    latitude = models.DecimalField(max_digits=9, decimal_places=6)
+    longitude = models.DecimalField(max_digits=9, decimal_places=6)
+    accuracy_m = models.FloatField(null=True, blank=True)
+    source = models.CharField(
+        max_length=20,
+        choices=[('Web', 'Web'), ('Mobile', 'Mobile')],
+        default='Web',
+    )
+    is_within_office_hours = models.BooleanField(default=True)
+    near_home = models.BooleanField(default=False)
+
+    class Meta:
+        indexes = [
+            models.Index(fields=['tenant', 'employee', '-recorded_at']),
+            models.Index(fields=['tenant', 'recorded_at']),
+        ]

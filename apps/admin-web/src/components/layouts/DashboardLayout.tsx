@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState, useEffect, useMemo } from 'react';
-import { Avatar, Button, Skeleton } from '@nextui-org/react';
+import { Avatar, Button, Skeleton, Chip } from '@nextui-org/react';
 import { useTheme } from 'next-themes';
 import { Menu, Moon, Sun, X, RefreshCw, Shield } from 'lucide-react';
 import { GlobalSearch } from './GlobalSearch';
@@ -31,6 +31,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   const queryClient = useQueryClient();
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [redirectNotice, setRedirectNotice] = useState('');
+  const [tenantPlan, setTenantPlan] = useState<string>('');
 
   const { isAuthReady, isAuthenticated, user, primaryRole, roles } = useAuth();
   const { isCooldown, message, pendingCount, retryAfterSeconds } = useCooldown();
@@ -45,6 +46,11 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
     const storedColor = localStorage.getItem('tenant_primary_hsl');
     if (storedColor) {
       document.documentElement.style.setProperty('--nextui-primary', storedColor);
+    }
+    
+    const plan = localStorage.getItem('tenant_plan');
+    if (plan) {
+      setTenantPlan(plan);
     }
   }, []);
 
@@ -65,7 +71,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
 
   const handleGlobalRefresh = async () => {
     setIsRefreshing(true);
-    await queryClient.invalidateQueries();
+    await queryClient.refetchQueries({ type: 'active' });
     setTimeout(() => setIsRefreshing(false), 600);
   };
 
@@ -76,7 +82,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
 
   const toggleSidebar = () => setSidebarOpen(!sidebarOpen);
 
-  const getFilteredMenu = (): MenuSection[] => {
+  const filteredMenu = useMemo(() => {
     const tenantJurisdictions = getStoredJurisdictions();
     const filterItem = (item: { allowedRoles: Role[]; jurisdictions?: import('@/lib/jurisdiction').Jurisdiction[]; children?: typeof item[] }) => {
       if (!item.allowedRoles.some((role) => activeRoles.has(role))) return false;
@@ -101,9 +107,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
         return { ...section, items: filteredItems };
       })
       .filter((section) => section.items.length > 0);
-  };
-
-  const filteredMenu = getFilteredMenu();
+  }, [activeRoles]);
   const currentMenu = findMenuItemByPath(pathname);
   const isAuthorized =
     authLoading || !currentMenu
@@ -256,6 +260,16 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
             <Button isIconOnly variant="light" className="md:hidden text-foreground" onPress={toggleSidebar}>
               <Menu size={20} />
             </Button>
+            {mounted && tenantPlan && (
+              <Chip 
+                size="sm" 
+                variant="flat" 
+                color={tenantPlan === 'enterprise' ? 'secondary' : tenantPlan === 'professional' ? 'primary' : 'default'}
+                className="hidden md:flex font-semibold tracking-widest uppercase text-[10px]"
+              >
+                {tenantPlan}
+              </Chip>
+            )}
             <GlobalSearch activeRoles={activeRoles} />
           </div>
 

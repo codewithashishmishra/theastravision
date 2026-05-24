@@ -1,10 +1,15 @@
 'use client';
 
-import { ResourcePage } from '@/components/crud/ResourcePage';
-import { resourcePageConfigs } from '@/config/resourcePageConfigs';
+import { useEffect } from 'react';
+import { useRouter } from 'next/navigation';
 
-export default function Page() {
-  const config = resourcePageConfigs['org-departments'];
-  if (!config) return <div className="p-8">Configuration missing.</div>;
-  return <ResourcePage config={config} />;
+/** Add Employee menu entry redirects to directory with create flow. */
+export default function AddEmployeeRedirectPage() {
+  const router = useRouter();
+
+  useEffect(() => {
+    router.replace('/employees/directory?action=create');
+  }, [router]);
+
+  return null;
 }

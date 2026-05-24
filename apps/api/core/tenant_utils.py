@@ -5,7 +5,7 @@ from employees.models import Employee
 def get_employee_for_user(user):
     if not user or not user.is_authenticated:
         return None
-    return Employee.objects.filter(user=user).select_related("tenant", "reporting_manager").first()
+    return Employee.objects.filter(user=user).select_related("tenant", "reporting_manager", "branch").first()
 
 
 def resolve_tenant_id(user):
@@ -41,5 +41,14 @@ def resolve_request_tenant_id(request):
     except (ValueError, AttributeError):
         return None
     if Tenant.objects.filter(id=tid).exists():
+        from core.audit import system_audit_log
+
+        system_audit_log(
+            request,
+            action="tenant.override",
+            module="iam",
+            user=request.user,
+            metadata={"tenant_id": str(tid)},
+        )
         return tid
     return None

@@ -10,13 +10,16 @@ import {
   Spinner,
   Tabs,
   Tab,
+  Textarea,
 } from '@nextui-org/react';
 import api from '@/lib/axios';
+import { setFrontendDebugEnabled } from '@/lib/debugLogStore';
 
 const MODULE_UTIL = 'PLATFORM_UTILIZATION';
 const MODULE_SMTP = 'SMTP';
 const MODULE_AI = 'AI';
 const MODULE_IMAP = 'IMAP';
+const MODULE_DEBUG = 'FRONTEND_DEBUG';
 
 type UtilizationConfig = {
   enabled: boolean;
@@ -54,6 +57,10 @@ type ImapConfig = {
   password: string;
   folder: string;
   poll_interval_minutes: number;
+};
+
+type DebugConfig = {
+  enabled: boolean;
 };
 
 type EnvConfigRow<T> = {
@@ -99,6 +106,10 @@ const IMAP_DEFAULTS: ImapConfig = {
   password: '',
   folder: 'INBOX',
   poll_interval_minutes: 5,
+};
+
+const DEBUG_DEFAULTS: DebugConfig = {
+  enabled: false,
 };
 
 async function loadModule<T>(module: string, defaults: T): Promise<{ id: string | null; form: T }> {
@@ -157,14 +168,21 @@ export default function PlatformConfigPage() {
   const [imapId, setImapId] = useState<string | null>(null);
   const [imapForm, setImapForm] = useState<ImapConfig>(IMAP_DEFAULTS);
 
+  const [debugId, setDebugId] = useState<string | null>(null);
+  const [debugForm, setDebugForm] = useState<DebugConfig>(DEBUG_DEFAULTS);
+
+  const [envFiles, setEnvFiles] = useState<{ api: string; ai_service: string }>({ api: '', ai_service: '' });
+
   useEffect(() => {
     let cancelled = false;
     (async () => {
-      const [util, smtp, ai, imap] = await Promise.all([
+      const [util, smtp, ai, imap, debug, envRes] = await Promise.all([
         loadModule(MODULE_UTIL, UTIL_DEFAULTS),
         loadModule(MODULE_SMTP, SMTP_DEFAULTS),
         loadModule(MODULE_AI, AI_DEFAULTS),
         loadModule(MODULE_IMAP, IMAP_DEFAULTS),
+        loadModule(MODULE_DEBUG, DEBUG_DEFAULTS),
+        api.get('/config/env-file/').catch(() => ({ data: { api: '', ai_service: '' } })),
       ]);
       if (cancelled) return;
       setUtilId(util.id);
@@ -175,6 +193,10 @@ export default function PlatformConfigPage() {
       setAiForm(ai.form);
       setImapId(imap.id);
       setImapForm(imap.form);
+      setDebugId(debug.id);
+      setDebugForm(debug.form);
+      setFrontendDebugEnabled(debug.form.enabled);
+      setEnvFiles(envRes.data);
       setLoading(false);
     })();
     return () => {
@@ -251,6 +273,37 @@ export default function PlatformConfigPage() {
       setMessage('IMAP settings saved (encrypted at rest).');
     } catch {
       setMessage('Failed to save IMAP settings.');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleSaveEnvFiles = async () => {
+    setSaving(true);
+    setMessage('');
+    try {
+      await api.post('/config/env-file/', envFiles);
+      setMessage('System environment files saved. A server restart may be required.');
+    } catch {
+      setMessage('Failed to save environment files.');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleSaveDebug = async () => {
+    setSaving(true);
+    setMessage('');
+    try {
+      await saveModule(MODULE_DEBUG, debugId, debugForm);
+      if (!debugId) {
+        const res = await api.get<EnvConfigRow<DebugConfig>>(`/env-configs/${MODULE_DEBUG}/`);
+        setDebugId(res.data.id);
+      }
+      setFrontendDebugEnabled(debugForm.enabled);
+      setMessage('Debug settings saved.');
+    } catch {
+      setMessage('Failed to save debug settings.');
     } finally {
       setSaving(false);
     }
@@ -489,6 +542,60 @@ export default function PlatformConfigPage() {
               <Button color="primary" isLoading={saving} onPress={handleSaveAi}>
                 Save AI settings
               </Button>
+            </CardBody>
+          </Card>
+        </Tab>
+
+        <Tab key="debug" title="Debug">
+          <Card className="border border-divider shadow-sm mt-4">
+            <CardBody className="gap-5 p-6">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="font-semibold">Enable frontend HTTP debug logging</p>
+                  <p className="text-xs text-default-500 mt-1">
+                    Module: {MODULE_DEBUG}. When enabled, all role sessions log HTTP request and
+                    response details (headers, body) to the API server{' '}
+                    <code className="text-xs bg-default-100 px-1 rounded">debug.log</code> for
+                    verification.
+                  </p>
+                </div>
+                <Switch
+                  isSelected={debugForm.enabled}
+                  onValueChange={(v) => setDebugForm((p) => ({ ...p, enabled: v }))}
+                />
+              </div>
+              <Button color="primary" isLoading={saving} onPress={handleSaveDebug}>
+                Save debug settings
+              </Button>
+            </CardBody>
+          </Card>
+        </Tab>
+
+        <Tab key="env" title="System Env (.env)">
+          <Card className="border border-divider shadow-sm mt-4">
+            <CardBody className="gap-4 p-6">
+              <div className="bg-warning-50 text-warning-800 p-4 rounded-lg text-sm mb-2 border border-warning-200">
+                <strong>Warning:</strong> Modifying these raw <code>.env</code> files can break the platform. Changes to core variables (e.g. <code>SECRET_KEY</code>, <code>DATABASES</code>) require a manual server restart to take effect.
+              </div>
+              <p className="text-sm font-semibold mt-2">API Backend (.env)</p>
+              <Textarea
+                minRows={10}
+                className="font-mono text-sm"
+                value={envFiles.api}
+                onValueChange={(v) => setEnvFiles((p) => ({ ...p, api: v }))}
+              />
+              <p className="text-sm font-semibold mt-4">AI Service (.env)</p>
+              <Textarea
+                minRows={6}
+                className="font-mono text-sm"
+                value={envFiles.ai_service}
+                onValueChange={(v) => setEnvFiles((p) => ({ ...p, ai_service: v }))}
+              />
+              <div className="mt-4">
+                <Button color="primary" isLoading={saving} onPress={handleSaveEnvFiles}>
+                  Save .env Files
+                </Button>
+              </div>
             </CardBody>
           </Card>
         </Tab>

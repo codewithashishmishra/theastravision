@@ -1,7 +1,11 @@
 from django.core.management.base import BaseCommand
 
 from core.models import ConfigSettings, EnvConfiguration
-from core.platform_config import MODULE_PLATFORM_UTILIZATION
+from core.platform_config import MODULE_FRONTEND_DEBUG, MODULE_PLATFORM_UTILIZATION
+
+FRONTEND_DEBUG_CONFIG = {
+    "enabled": False,
+}
 
 PLATFORM_UTILIZATION_CONFIG = {
     "enabled": True,
@@ -23,6 +27,7 @@ class Command(BaseCommand):
     def handle(self, *args, **options):
         ConfigSettings.get_or_create_key()
         self._seed_platform_utilization()
+        self._seed_frontend_debug()
         self.stdout.write(self.style.SUCCESS("Environment configuration seed complete"))
 
     def _seed_platform_utilization(self):
@@ -44,4 +49,25 @@ class Command(BaseCommand):
             obj.save()
             self.stdout.write(
                 f"Updated {MODULE_PLATFORM_UTILIZATION} (merged missing keys only)"
+            )
+
+    def _seed_frontend_debug(self):
+        obj, created = EnvConfiguration.objects.get_or_create(
+            module=MODULE_FRONTEND_DEBUG,
+        )
+        existing = obj.get_config()
+        if created or not existing:
+            obj.set_config(FRONTEND_DEBUG_CONFIG)
+            obj.save()
+            self.stdout.write(
+                self.style.SUCCESS(
+                    f"Seeded {MODULE_FRONTEND_DEBUG} (frontend HTTP debug logging)"
+                )
+            )
+        else:
+            merged = {**FRONTEND_DEBUG_CONFIG, **existing}
+            obj.set_config(merged)
+            obj.save()
+            self.stdout.write(
+                f"Updated {MODULE_FRONTEND_DEBUG} (merged missing keys only)"
             )

@@ -102,9 +102,16 @@ class JobRequisitionViewSet(JobRequisitionCareerMixin, BaseTenantViewSet):
 
 
 class CandidateViewSet(BaseTenantViewSet):
-    queryset = Candidate.objects.select_related('job').all()
+    queryset = Candidate.objects.select_related('job', 'proposed_reporting_manager').all()
     serializer_class = CandidateSerializer
     parser_classes = [MultiPartParser, FormParser, JSONParser]
+
+    def get_serializer_context(self):
+        from core.tenant_utils import resolve_request_tenant_id
+
+        ctx = super().get_serializer_context()
+        ctx['tenant_id'] = resolve_request_tenant_id(self.request)
+        return ctx
 
     def perform_create(self, serializer):
         tenant_id = getattr(self.request, 'tenant_id', None)

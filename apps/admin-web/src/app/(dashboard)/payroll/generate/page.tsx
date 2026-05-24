@@ -45,9 +45,9 @@ export default function PayrollGeneratePage() {
 
   const generateMutation = useMutation({
     mutationFn: async (id: string) => payrollApi.runs.generate(id),
-    onSuccess: () => {
+    onSuccess: (_, id) => {
       setStep(3);
-      queryClient.invalidateQueries({ queryKey: ['payroll-payslips'] });
+      queryClient.invalidateQueries({ queryKey: ['payroll-payslips', id] });
     },
   });
 

@@ -67,6 +67,16 @@ class BranchSerializer(TenantCodeUniqueMixin, serializers.ModelSerializer):
         fields = '__all__'
         read_only_fields = ('tenant', 'id')
 
+    def validate(self, attrs):
+        attrs = super().validate(attrs)
+        lat = attrs.get('latitude', getattr(self.instance, 'latitude', None))
+        lng = attrs.get('longitude', getattr(self.instance, 'longitude', None))
+        if lat is not None and lng is None:
+            raise serializers.ValidationError({'longitude': 'Both latitude and longitude are required for office location.'})
+        if lng is not None and lat is None:
+            raise serializers.ValidationError({'latitude': 'Both latitude and longitude are required for office location.'})
+        return attrs
+
 
 class DepartmentSerializer(TenantCodeUniqueMixin, serializers.ModelSerializer):
     tenant_code_field_label = 'department'

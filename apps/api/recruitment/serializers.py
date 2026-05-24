@@ -13,6 +13,8 @@ from .models import (
     ProctorSnapshot,
     TenantCareerPortalSettings,
 )
+from employees.models import Employee
+
 from .job_board_utils import sanitize_job_html
 
 
@@ -49,6 +51,7 @@ class CareerPortalSettingsSerializer(serializers.ModelSerializer):
 class CandidateSerializer(serializers.ModelSerializer):
     job_title = serializers.CharField(source='job.title', read_only=True)
     match_passed = serializers.SerializerMethodField()
+    proposed_reporting_manager_name = serializers.SerializerMethodField()
 
     class Meta:
         model = Candidate
@@ -57,6 +60,30 @@ class CandidateSerializer(serializers.ModelSerializer):
 
     def get_match_passed(self, obj):
         return obj.ai_match_score >= (obj.job.match_threshold or 70)
+
+    def get_proposed_reporting_manager_name(self, obj):
+        mgr = obj.proposed_reporting_manager
+        if mgr:
+            return f'{mgr.first_name} {mgr.last_name}'.strip()
+        return None
+
+    def validate(self, attrs):
+        tenant_id = self.context.get('tenant_id')
+        manager = attrs.get('proposed_reporting_manager')
+        if self.instance is None and not manager:
+            raise serializers.ValidationError(
+                {'proposed_reporting_manager': 'Future reporting manager is required.'}
+            )
+        if manager and tenant_id:
+            if str(manager.tenant_id) != str(tenant_id):
+                raise serializers.ValidationError(
+                    {'proposed_reporting_manager': 'Manager must belong to the same organization.'}
+                )
+            if manager.status != 'Active':
+                raise serializers.ValidationError(
+                    {'proposed_reporting_manager': 'Future reporting manager must be an active employee.'}
+                )
+        return attrs
 
 
 class InterviewSerializer(serializers.ModelSerializer):

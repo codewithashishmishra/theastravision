@@ -31,7 +31,10 @@ export function findMenuItemByPath(pathname: string): MenuItem | null {
 }
 
 export function isPathAllowedForRoles(pathname: string, activeRoles: Set<Role>): boolean {
+  if (pathname === '/login' || pathname.startsWith('/login/')) {
+    return true;
+  }
   const match = findMenuItemByPath(pathname);
-  if (!match) return true;
+  if (!match) return false;
   return match.allowedRoles.some((role) => activeRoles.has(role));
 }

@@ -1,4 +1,4 @@
-"""Helpers for audit API — ClickHouse queries with PostgreSQL fallback."""
+"""Helpers for audit API — ClickHouse when enabled, PostgreSQL otherwise."""
 
 from core.clickhouse_logs import clickhouse_enabled, query_logs
 from core.tenant_utils import resolve_tenant_id
@@ -60,6 +60,32 @@ def _ch_filters_from_request(request, *, log_type: str, module_in=None):
         filters["service"] = service
 
     return filters
+
+
+def fetch_logs_from_postgres(request, *, tenant_id=None, module_in=None, limit=200):
+    """Query audit/login history from PostgreSQL when ClickHouse is disabled."""
+    from core.audit_serializers import AuthSessionSerializer, SystemAuditLogSerializer
+    from core.audit_views import _filter_audit_logs, _filter_login_sessions
+    from core.models import AuthSession, SystemAuditLog
+
+    log_type = request.query_params.get("log_type", "audit")
+    if log_type == "login":
+        qs = AuthSession.objects.select_related("user", "user__tenant").order_by("-created_at")
+        if tenant_id:
+            qs = qs.filter(user__tenant_id=tenant_id)
+        tenant_filter = request.query_params.get("tenant_id")
+        if tenant_filter:
+            qs = qs.filter(user__tenant_id=tenant_filter)
+        qs = _filter_login_sessions(qs, request)[:limit]
+        return [AuthSessionSerializer(row).data for row in qs]
+
+    qs = SystemAuditLog.objects.select_related("user", "tenant").order_by("-created_at")
+    if tenant_id:
+        qs = qs.filter(tenant_id=tenant_id)
+    if module_in:
+        qs = qs.filter(module__in=module_in)
+    qs = _filter_audit_logs(qs, request)[:limit]
+    return SystemAuditLogSerializer(qs, many=True).data
 
 
 def fetch_logs_from_clickhouse(request, *, log_type: str, module_in=None, tenant_id=None):

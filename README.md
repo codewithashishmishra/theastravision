@@ -64,7 +64,13 @@ REDIS_URL=redis://localhost:6379/0
 ALLOW_S3=False
 AI_SERVICE_BASE_URL=http://127.0.0.1:8001
 FRONTEND_APP_URL=http://localhost:3000
+REDIS_ALLOW=True
+E2EE_ENABLED=True
+METRICS_ENABLED=False
+CLICKHOUSE_ENABLED=False
 ```
+
+See [`apps/api/.env.example`](apps/api/.env.example) for all optional variables. In production, keep `E2EE_ENABLED=True`, set `METRICS_ENABLED=True`, and use `REDIS_ALLOW=True` so E2EE sessions use Redis instead of PostgreSQL. **ClickHouse is optional** — leave `CLICKHOUSE_ENABLED=False` to store and query audit/login logs in PostgreSQL only.
 
 Create a virtual environment, install dependencies, and run migrations:
 ```bash
@@ -142,6 +148,24 @@ argospm update
 argospm install translate-hi_en
 ```
 *Note: The first time a resume match or interview scoring runs, the API will automatically download the `all-MiniLM-L6-v2` embedding model (~90MB).*
+
+---
+
+## Lightweight local dev (lower CPU/RAM)
+
+You do not need every process for day-to-day UI work. `start_services.py` launches the full stack (Django, Celery worker, Celery beat, AI service, admin-web), which can use most of a 16GB machine.
+
+| What you are doing | Start | Skip |
+|--------------------|--------|------|
+| UI + API only | `runserver`, `npm run dev` | Celery beat/worker, AI service |
+| WFH, cold campaigns, interviews | Add Celery worker (`--pool=solo` on Windows) | Celery beat unless testing scheduled jobs |
+| Full stack | `python start_services.py` from repo root | — |
+
+**Celery beat** runs platform utilization sampling every 30s and other periodic tasks. Skip it locally unless you need scheduled jobs.
+
+**Turbopack cache:** If `apps/admin-web` dev RAM keeps growing, stop the dev server, delete `apps/admin-web/.next`, and run `npm run dev` again.
+
+Platform utilization **cooldown is not applied when `DEBUG=True`** (metrics still update for the monitoring UI). High local RAM from dev tools will not block saves.
 
 ---
 

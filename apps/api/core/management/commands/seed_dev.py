@@ -12,6 +12,27 @@ from organization.models import Branch, CompanyProfile, Department, Designation
 
 fake = Faker()
 
+GENUINE_COMPANIES = [
+    "TechNova Solutions", "Quantum Nexus Systems", "Apex Core Technologies",
+    "BlueShift Analytics", "Vertex Global Services", "Pinnacle Dynamics",
+    "Elevate Digital", "Lumina InfoTech", "Nexus Cloud Corp", "Prime Logic",
+    "Zenith Engineering", "Stellar Innovations", "Aura Networks", "Crest IT Solutions",
+    "Vanguard Tech Partners", "Horizon Data Services", "Summit Software", "Catalyst Solutions",
+    "Pioneer Analytics", "Beacon Information Systems", "Oasis Software Systems"
+]
+
+GENUINE_FIRST_NAMES = [
+    "Aarav", "Rohan", "Vikram", "Neha", "Priya", "Rahul", "Aditi", "Karan", "Siddharth",
+    "Anita", "Sunil", "Kavita", "Sanjay", "Anjali", "Arjun", "Pooja", "Rajesh", "Nisha",
+    "Alex", "David", "Emma", "Sarah", "Michael", "John", "Jessica", "Daniel", "Emily"
+]
+
+GENUINE_LAST_NAMES = [
+    "Sharma", "Verma", "Patel", "Singh", "Gupta", "Kumar", "Reddy", "Nair", "Iyer",
+    "Jain", "Desai", "Rao", "Menon", "Joshi", "Kapoor", "Chopra", "Malhotra", "Mehta",
+    "Smith", "Johnson", "Brown", "Taylor", "Anderson", "Thomas", "Jackson", "White"
+]
+
 PRIMARY_TENANT = {
     'name': 'Aastraa Demo',
     'domain': 'aastraa-demo',
@@ -64,11 +85,13 @@ class Command(BaseCommand):
 
         self.stdout.write('Creating 100 bulk companies...')
         tenants = []
-        for _ in range(100):
-            slug = fake.domain_word() + str(random.randint(100, 99999))
-            email_domain = f'{slug}.test'
+        for i in range(100):
+            base_name = random.choice(GENUINE_COMPANIES)
+            company_name = f'{base_name} {i+1}'
+            slug = company_name.lower().replace(' ', '-') + str(random.randint(100, 9999))
+            email_domain = f'{slug}.com'
             tenant = Tenant.objects.create(
-                name=f'{fake.company()} - {fake.unique.random_int(min=1000, max=9999)}',
+                name=company_name,
                 domain=slug,
                 email_domain=email_domain,
             )
@@ -83,10 +106,10 @@ class Command(BaseCommand):
             designations = list(Designation.objects.filter(tenant=tenant))
             domain = tenant.email_domain or 'example.com'
 
-            for _ in range(5):
-                first_name = fake.first_name()
-                last_name = fake.last_name()
-                email = f'{first_name.lower()}.{last_name.lower()}@{domain}'
+            for j in range(5):
+                first_name = random.choice(GENUINE_FIRST_NAMES)
+                last_name = random.choice(GENUINE_LAST_NAMES)
+                email = f'{first_name.lower()}.{last_name.lower()}{j+1}@{domain}'
 
                 user = User(
                     username=email,
@@ -131,6 +154,10 @@ class Command(BaseCommand):
                     ifsc_code=fake.swift8(),
                     account_type='Savings',
                 )
+
+            self._assign_org_hierarchy(tenant)
+
+        self._assign_org_hierarchy(primary)
 
         from django.core.management import call_command
 
@@ -300,3 +327,31 @@ class Command(BaseCommand):
                 code=desig[:3].upper(),
                 defaults={'name': desig},
             )
+
+    def _assign_org_hierarchy(self, tenant):
+        """Assign a simple reporting tree: manager@ as root, others report to root."""
+        employees = list(
+            Employee.objects.filter(tenant=tenant, status='Active').order_by(
+                'date_of_joining', 'employee_code'
+            )
+        )
+        if not employees:
+            return
+
+        domain = tenant.email_domain or 'aastraa.com'
+        manager_user = User.objects.filter(email=f'manager@{domain}').first()
+        root = None
+        if manager_user:
+            root = Employee.objects.filter(tenant=tenant, user=manager_user).first()
+
+        if not root:
+            root = employees[0]
+        root.reporting_manager = None
+        root.save(update_fields=['reporting_manager'])
+
+        for emp in employees:
+            if emp.pk == root.pk:
+                continue
+            if emp.reporting_manager_id != root.pk:
+                emp.reporting_manager = root
+                emp.save(update_fields=['reporting_manager'])

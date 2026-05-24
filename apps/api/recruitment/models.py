@@ -121,6 +121,14 @@ class Candidate(BaseTenantModel):
     ai_match_score = models.IntegerField(default=0, help_text='AI calculated match score (0-100)')
     stage = models.CharField(max_length=50, choices=STAGE_CHOICES, default='Sourced')
     applied_on = models.DateTimeField(auto_now_add=True)
+    proposed_reporting_manager = models.ForeignKey(
+        Employee,
+        on_delete=models.PROTECT,
+        null=True,
+        blank=True,
+        related_name='proposed_hires',
+        help_text='Future reporting manager after hire',
+    )
 
     def __str__(self):
         return f"{self.first_name} {self.last_name} - {self.job.title}"

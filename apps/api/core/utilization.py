@@ -12,6 +12,7 @@ from core.platform_config import (
     cooldown_duration_seconds,
     cooldown_message,
     cpu_threshold,
+    frontend_debug_enabled,
     ram_threshold,
     utilization_enabled,
 )
@@ -26,7 +27,8 @@ def _redis_client():
 
 
 def read_host_metrics():
-    cpu_percent = psutil.cpu_percent(interval=0.5)
+    # Non-blocking read (interval=None uses last sample; avoids 500ms Celery worker stall)
+    cpu_percent = psutil.cpu_percent(interval=None)
     memory = psutil.virtual_memory()
     return {
         "cpu_usage_percent": cpu_percent,
@@ -127,6 +129,9 @@ def sample_utilization_and_maybe_cooldown():
         metrics["cpu_usage_percent"] >= cpu_limit
         and metrics["ram_usage_percent"] >= ram_limit
     ):
+        # Dev machines often sit above thresholds due to local tooling; still record metrics.
+        if getattr(settings, "DEBUG", False):
+            return {"triggered": False, "metrics": metrics, "skipped_cooldown": True}
         activate_cooldown()
         return {"triggered": True, "metrics": metrics}
 
@@ -153,4 +158,5 @@ def build_status_payload():
             metrics.get("cpu_usage_percent", 0) >= cpu_limit * 0.9
             or metrics.get("ram_usage_percent", 0) >= ram_limit * 0.9
         ),
+        "frontend_debug_enabled": frontend_debug_enabled(),
     }

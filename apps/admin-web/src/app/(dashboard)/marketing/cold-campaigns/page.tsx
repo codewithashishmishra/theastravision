@@ -35,6 +35,8 @@ import {
   LibraryVariant,
   ThreadMessage,
 } from '@/lib/coldCampaignApi';
+import { formatRegionalDate, formatRegionalDateTime } from '@/lib/formatDateTime';
+import { sanitizeHtml } from '@/lib/sanitizeHtml';
 
 const STATUS_COLOR: Record<string, 'default' | 'primary' | 'success' | 'warning' | 'danger'> = {
   draft: 'default',
@@ -500,7 +502,7 @@ export default function ColdCampaignsPage() {
                       </Chip>
                     </TableCell>
                     <TableCell className="max-w-[200px] truncate">{t.subject}</TableCell>
-                    <TableCell>{new Date(t.received_at).toLocaleString()}</TableCell>
+                    <TableCell>{formatRegionalDateTime(t.received_at)}</TableCell>
                   </TableRow>
                 ))}
               </TableBody>
@@ -653,7 +655,7 @@ export default function ColdCampaignsPage() {
                     </TableCell>
                     <TableCell>
                       {r.opened_at
-                        ? `Yes (${new Date(r.opened_at).toLocaleString()})`
+                        ? `Yes (${formatRegionalDateTime(r.opened_at)})`
                         : r.status === 'sent'
                           ? 'No'
                           : '—'}
@@ -771,7 +773,7 @@ export default function ColdCampaignsPage() {
                       <CardBody className="gap-2 p-3">
                         <p className="text-xs text-default-500">
                           {v.batch_objective} · {v.campaign_name || 'Library'} ·{' '}
-                          {new Date(v.batch_created_at).toLocaleDateString()}
+                          {formatRegionalDate(v.batch_created_at)}
                         </p>
                         <p className="font-semibold text-sm">{v.subject}</p>
                         <p className="text-xs">{stripHtml(v.body_html, 80)}</p>
@@ -833,7 +835,7 @@ export default function ColdCampaignsPage() {
               <ModalBody>
                 <div
                   className="border rounded-lg p-4 bg-white text-black"
-                  dangerouslySetInnerHTML={{ __html: previewHtml }}
+                  dangerouslySetInnerHTML={{ __html: sanitizeHtml(previewHtml) }}
                 />
               </ModalBody>
               <ModalFooter>

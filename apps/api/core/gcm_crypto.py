@@ -12,6 +12,7 @@ from cryptography.hazmat.primitives import hashes
 from cryptography.hazmat.primitives.ciphers.aead import AESGCM
 from cryptography.hazmat.primitives.kdf.hkdf import HKDF
 from django.conf import settings
+from django.core.exceptions import ImproperlyConfigured
 
 MAGIC = b"AASTG1"
 NONCE_SIZE = 12
@@ -19,7 +20,11 @@ ALGORITHM = "aes-256-gcm"
 
 
 def _master_key() -> bytes:
-    raw = getattr(settings, "TRACKER_MASTER_KEY", None) or settings.SECRET_KEY
+    raw = getattr(settings, "TRACKER_MASTER_KEY", None) or ""
+    if not raw:
+        if not settings.DEBUG:
+            raise ImproperlyConfigured("TRACKER_MASTER_KEY must be set when DEBUG=False.")
+        raw = settings.SECRET_KEY
     if isinstance(raw, str):
         raw = raw.encode()
     return hashlib.sha256(raw).digest()

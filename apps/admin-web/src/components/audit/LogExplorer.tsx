@@ -8,6 +8,7 @@ import { Search, RefreshCw } from 'lucide-react';
 import ExportButton from '@/components/wfh/ExportButton';
 import { TenantFilterSelect } from '@/components/audit/TenantFilterSelect';
 import { auditApi, type SystemLogEntry } from '@/lib/auditApi';
+import { formatUtcDateTime } from '@/lib/formatDateTime';
 
 const LEVEL_COLORS: Record<string, 'default' | 'primary' | 'warning' | 'danger' | 'success'> = {
   DEBUG: 'default',
@@ -56,7 +57,7 @@ export function LogExplorer({ defaultService }: Props) {
       since,
       level: level || undefined,
       search: debouncedSearch || undefined,
-      limit: 200,
+      limit: 100,
       tenant_id: tenantId || undefined,
     })
       .then((res) => setLogs(res.data.results))
@@ -67,8 +68,20 @@ export function LogExplorer({ defaultService }: Props) {
 
   useEffect(() => {
     if (!liveTail) return undefined;
-    const interval = setInterval(load, 3000);
-    return () => clearInterval(interval);
+    const tick = () => {
+      if (typeof document !== 'undefined' && document.hidden) return;
+      load();
+    };
+    tick();
+    const interval = setInterval(tick, 10_000);
+    const onVisibility = () => {
+      if (!document.hidden) load();
+    };
+    document.addEventListener('visibilitychange', onVisibility);
+    return () => {
+      clearInterval(interval);
+      document.removeEventListener('visibilitychange', onVisibility);
+    };
   }, [liveTail, load]);
 
   const exportRows = useMemo(
@@ -140,7 +153,7 @@ export function LogExplorer({ defaultService }: Props) {
                   className="w-full text-left px-4 py-2 flex gap-3 items-start"
                   onClick={() => setExpanded((p) => ({ ...p, [idx]: !p[idx] }))}
                 >
-                  <span className="text-default-400 shrink-0 w-44">{new Date(log.timestamp).toLocaleString()}</span>
+                  <span className="text-default-400 shrink-0 w-44">{formatUtcDateTime(log.timestamp)}</span>
                   <Chip size="sm" color={LEVEL_COLORS[log.level] || 'default'} variant="flat" className="shrink-0">{log.level}</Chip>
                   <Chip size="sm" variant="bordered" className="shrink-0">{log.service}</Chip>
                   <span className="text-foreground break-all">{log.message}</span>

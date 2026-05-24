@@ -9,3 +9,10 @@ apps/api/venv/
 apps/ai-service/venv/
 .idea/
 *.log
+
+# Personal dev automation (local git branch sync)
+sync.ps1
+finish_sync.ps1
+
+# Next.js build output (all apps)
+.next/

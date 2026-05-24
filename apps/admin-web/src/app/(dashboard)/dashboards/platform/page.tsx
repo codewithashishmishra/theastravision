@@ -43,9 +43,20 @@ export default function PlatformDashboard() {
 
     auditApi.platformServices().then((r) => setServices(r.data.services || [])).catch(() => {});
     
-    fetchStats();
-    const interval = setInterval(fetchStats, 3000);
-    return () => clearInterval(interval);
+    const tick = () => {
+      if (typeof document !== 'undefined' && document.hidden) return;
+      void fetchStats();
+    };
+    tick();
+    const interval = setInterval(tick, 20_000);
+    const onVisibility = () => {
+      if (!document.hidden) void fetchStats();
+    };
+    document.addEventListener('visibilitychange', onVisibility);
+    return () => {
+      clearInterval(interval);
+      document.removeEventListener('visibilitychange', onVisibility);
+    };
   }, []);
 
   if (!isClient) return null;
@@ -228,7 +239,7 @@ export default function PlatformDashboard() {
               <Server className="text-primary" size={20}/> Hardware CPU Load History (Live)
             </h3>
             <div className="h-72 w-full">
-              <ResponsiveContainer width="100%" height="100%" minHeight={1}>
+              <ResponsiveContainer width="99%" height={280}>
                 <AreaChart data={cpuHistory} margin={{ top: 10, right: 30, left: 0, bottom: 0 }}>
                   <defs>
                     <linearGradient id="colorCpu" x1="0" y1="0" x2="0" y2="1">
@@ -258,7 +269,7 @@ export default function PlatformDashboard() {
             </h3>
             
             <div className="h-48 w-full relative mb-4">
-              <ResponsiveContainer width="100%" height="100%" minHeight={1}>
+              <ResponsiveContainer width="99%" height={190}>
                 <PieChart>
                   <Pie
                     data={authData}

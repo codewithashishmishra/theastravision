@@ -4,9 +4,10 @@ import { useCallback, useEffect, useState } from 'react';
 import { Select, SelectItem, Chip } from '@nextui-org/react';
 import { AuditLogTable } from '@/components/audit/AuditLogTable';
 import { auditApi, type AuditFilters, type LoginSession } from '@/lib/auditApi';
+import { formatUtcDateTime } from '@/lib/formatDateTime';
 
 const columns = [
-  { key: 'created_at', label: 'Time', render: (row: Record<string, unknown>) => new Date(String(row.created_at)).toLocaleString() },
+  { key: 'created_at', label: 'Time', render: (row: Record<string, unknown>) => formatUtcDateTime(String(row.created_at)) },
   { key: 'tenant_name', label: 'Tenant' },
   { key: 'user_email', label: 'User' },
   { key: 'login_method', label: 'Method' },

@@ -1,7 +1,10 @@
 from rest_framework import serializers
+
+from core.regional_serializers import RegionalModelSerializer
 from .models import Notification, NotificationPreference
 
-class NotificationSerializer(serializers.ModelSerializer):
+
+class NotificationSerializer(RegionalModelSerializer):
     class Meta:
         model = Notification
         fields = '__all__'

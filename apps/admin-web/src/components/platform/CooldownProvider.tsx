@@ -19,6 +19,7 @@ import {
   getPendingCount,
   type QueuedMutation,
 } from '@/lib/offlineMutationQueue';
+import { setFrontendDebugEnabled } from '@/lib/debugLogStore';
 import { useAuth } from '@/lib/AuthProvider';
 
 type CooldownContextValue = {
@@ -35,6 +36,9 @@ const CooldownContext = createContext<CooldownContextValue | null>(null);
 const COOLDOWN_MESSAGE =
   'System is temporarily unavailable for saves (cooling down). Your changes are stored locally and will sync automatically.';
 
+const POLL_IDLE_MS = 60_000;
+const POLL_ACTIVE_MS = 12_000;
+
 export function CooldownProvider({ children }: { children: React.ReactNode }) {
   const { isAuthenticated, isAuthReady } = useAuth();
   const [status, setStatus] = useState<PlatformStatus | null>(null);
@@ -50,6 +54,7 @@ export function CooldownProvider({ children }: { children: React.ReactNode }) {
     try {
       const next = await fetchPlatformStatus();
       setStatus(next);
+      setFrontendDebugEnabled(next.frontend_debug_enabled ?? false);
 
       if (wasCooldown.current && !next.cooldown_active) {
         await flushOfflineQueue(async (item: QueuedMutation) => {
@@ -78,12 +83,32 @@ export function CooldownProvider({ children }: { children: React.ReactNode }) {
     }
   }, [isAuthenticated, refreshPending]);
 
+  const pollIntervalMs = useMemo(() => {
+    if (status?.cooldown_active || pendingCount > 0) return POLL_ACTIVE_MS;
+    return POLL_IDLE_MS;
+  }, [status?.cooldown_active, pendingCount]);
+
   useEffect(() => {
     if (!isAuthReady || !isAuthenticated) return;
-    refreshStatus();
-    const id = setInterval(refreshStatus, 12000);
-    return () => clearInterval(id);
-  }, [isAuthReady, isAuthenticated, refreshStatus]);
+
+    const tick = () => {
+      if (typeof document !== 'undefined' && document.hidden) return;
+      void refreshStatus();
+    };
+
+    tick();
+    const id = setInterval(tick, pollIntervalMs);
+
+    const onVisibility = () => {
+      if (!document.hidden) tick();
+    };
+    document.addEventListener('visibilitychange', onVisibility);
+
+    return () => {
+      clearInterval(id);
+      document.removeEventListener('visibilitychange', onVisibility);
+    };
+  }, [isAuthReady, isAuthenticated, refreshStatus, pollIntervalMs]);
 
   useEffect(() => {
     const onQueued = () => refreshPending();

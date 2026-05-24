@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react';
 import { Card, CardBody, Chip, Table, TableBody, TableCell, TableColumn, TableHeader, TableRow } from '@nextui-org/react';
 import { wfhApi } from '@/lib/wfhApi';
+import { formatRegionalDateTime } from '@/lib/formatDateTime';
 
 type Session = {
   id: string;
@@ -40,8 +41,8 @@ export default function MySessionsPage() {
             <TableBody emptyContent="No sessions yet">
               {sessions.map((s) => (
                 <TableRow key={s.id}>
-                  <TableCell>{new Date(s.start_time).toLocaleString()}</TableCell>
-                  <TableCell>{s.end_time ? new Date(s.end_time).toLocaleString() : '—'}</TableCell>
+                  <TableCell>{formatRegionalDateTime(s.start_time)}</TableCell>
+                  <TableCell>{s.end_time ? formatRegionalDateTime(s.end_time) : '—'}</TableCell>
                   <TableCell>
                     <Chip size="sm" variant="flat">
                       {s.status}

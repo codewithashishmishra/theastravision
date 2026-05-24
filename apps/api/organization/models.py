@@ -53,6 +53,9 @@ class Branch(BaseTenantModel):
     country = models.CharField(max_length=100)
     timezone = models.CharField(max_length=100, default='UTC')
     is_head_office = models.BooleanField(default=False)
+    latitude = models.DecimalField(max_digits=9, decimal_places=6, null=True, blank=True)
+    longitude = models.DecimalField(max_digits=9, decimal_places=6, null=True, blank=True)
+    geofence_radius_meters = models.PositiveIntegerField(default=50)
 
     class Meta:
         constraints = [

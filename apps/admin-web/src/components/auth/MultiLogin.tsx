@@ -9,6 +9,8 @@ import { api } from '@/lib/api';
 import { buildTrackerCallbackUrl, isAllowedTrackerRedirect } from '@/lib/trackerRedirect';
 import { startAuthentication } from '@simplewebauthn/browser';
 import { loadAndPersistAuthSession } from '@/lib/authSession';
+import { setAccessToken } from '@/lib/tokenStore';
+import { getClientEcdhPublicB64, establishSessionFromLoginResponse } from '@/lib/e2ee/handshake';
 import AppFooter from '@/components/layouts/AppFooter';
 
 export default function MultiLogin() {
@@ -32,11 +34,8 @@ export default function MultiLogin() {
   const trackerState = searchParams.get('state');
   const isTrackerLogin = Boolean(trackerRedirect && isAllowedTrackerRedirect(trackerRedirect));
 
-  const persistTokens = (accessToken: string, refreshToken?: string) => {
-    localStorage.setItem('access_token', accessToken);
-    if (refreshToken) {
-      localStorage.setItem('refresh_token', refreshToken);
-    }
+  const persistTokens = (accessToken: string, _refreshToken?: string) => {
+    setAccessToken(accessToken);
   };
 
   const finishAuth = (accessToken: string, refreshToken?: string, email?: string) => {
@@ -73,11 +72,13 @@ export default function MultiLogin() {
     setError('');
 
     try {
-      const res = await api.post('/auth/login/password/', { email, password });
+      const client_ecdh_public = await getClientEcdhPublicB64();
+      const res = await api.post('/auth/login/password/', { email, password, client_ecdh_public });
       if (res.data.requires_totp) {
         setPreAuthToken(res.data.pre_auth_token);
         setStep('TOTP');
       } else if (res.data.access_token) {
+        await establishSessionFromLoginResponse(res.data);
         await handleAuthSuccess(res.data.access_token, res.data.refresh_token, email);
       }
     } catch (err: any) {
@@ -93,8 +94,14 @@ export default function MultiLogin() {
     setError('');
 
     try {
-      const res = await api.post('/auth/totp/verify-login/', { pre_auth_token: preAuthToken, code: totpCode });
+      const client_ecdh_public = await getClientEcdhPublicB64();
+      const res = await api.post('/auth/totp/verify-login/', {
+        pre_auth_token: preAuthToken,
+        code: totpCode,
+        client_ecdh_public,
+      });
       if (res.data.access_token) {
+        await establishSessionFromLoginResponse(res.data);
         await handleAuthSuccess(res.data.access_token, res.data.refresh_token, email);
       }
     } catch (err: any) {
@@ -116,10 +123,14 @@ export default function MultiLogin() {
       const asseResp = await startAuthentication(options);
 
       // 3. Send Assertion back to verify
-      const verificationRes = await api.post('/auth/passkey/login/verify/', asseResp);
+      const client_ecdh_public = await getClientEcdhPublicB64();
+      const verificationRes = await api.post('/auth/passkey/login/verify/', asseResp, {
+        headers: client_ecdh_public ? { 'X-Client-Ecdh-Public': client_ecdh_public } : {},
+      });
       
       if (verificationRes.data.access_token) {
         setIsPasskeyModalOpen(false);
+        await establishSessionFromLoginResponse(verificationRes.data);
         await handleAuthSuccess(
           verificationRes.data.access_token,
           verificationRes.data.refresh_token,
@@ -171,9 +182,11 @@ export default function MultiLogin() {
       const base64Image = canvasRef.current.toDataURL('image/jpeg');
 
       try {
-        const res = await api.post('/auth/face/login/', { email, image: base64Image });
+        const client_ecdh_public = await getClientEcdhPublicB64();
+        const res = await api.post('/auth/face/login/', { email, image: base64Image, client_ecdh_public });
         if (res.data.access_token) {
           stopWebcam();
+          await establishSessionFromLoginResponse(res.data);
           await handleAuthSuccess(
             res.data.access_token,
             res.data.refresh_token,

@@ -9,15 +9,17 @@ This document outlines the complete step-by-step process for deploying the Aastr
 Ensure your production server meets the following minimum requirements:
 - **OS**: Ubuntu 22.04 LTS (Recommended)
 - **CPU**: 4+ Cores
-- **RAM**: 8GB+ (16GB recommended due to AI models and ClickHouse)
+- **RAM**: 8GB+ (16GB recommended if running AI models and optional ClickHouse)
 - **Storage**: 100GB+ SSD
 
 ### Required External Services
 Before configuring the application, ensure the following services are installed and running (either locally or via managed cloud providers):
 1. **PostgreSQL** (Relational Database)
 2. **Redis** (Caching & Celery Message Broker)
-3. **ClickHouse** (High-Performance Analytics DB)
-4. **MinIO / AWS S3** (Object Storage for media and document assets)
+3. **MinIO / AWS S3** (Object Storage for media and document assets)
+
+### Optional External Services
+- **ClickHouse** — High-volume platform/audit log analytics. **Not required.** With `CLICKHOUSE_ENABLED=False` (default), all audit and login-session queries use PostgreSQL tables (`SystemAuditLog`, `AuthSession`) only.
 
 ---
 
@@ -71,13 +73,18 @@ SECRET_KEY=your-secure-production-key
 DATABASE_URL=postgres://user:pass@localhost:5432/aastraahr
 REDIS_URL=redis://localhost:6379/0
 
-# ClickHouse
-CLICKHOUSE_ENABLED=true
-CLICKHOUSE_HOST=localhost
-CLICKHOUSE_PORT=8123
-CLICKHOUSE_USER=default
-CLICKHOUSE_PASSWORD=
-CLICKHOUSE_DATABASE=default
+# Security & performance (required in production)
+E2EE_ENABLED=True
+REDIS_ALLOW=True
+METRICS_ENABLED=True
+
+# ClickHouse (optional — default off; audit logs use PostgreSQL when disabled)
+CLICKHOUSE_ENABLED=False
+# CLICKHOUSE_HOST=localhost
+# CLICKHOUSE_PORT=8123
+# CLICKHOUSE_USER=default
+# CLICKHOUSE_PASSWORD=
+# CLICKHOUSE_DATABASE=default
 
 # MinIO / S3
 ALLOW_S3=True
@@ -330,6 +337,9 @@ sudo certbot --nginx -d aastraa.yourdomain.com
 Includes a hosted careers page (Greenhouse-style), public job board API, and an embeddable SDK for your corporate website. Applications create candidates in the ATS pipeline. Enabled manually by platform admin in v1 (no self-serve billing).
 
 ### Revenue & Costing Analysis (5,000 India Users + 500 USA Users)
+
+For phased hosting (shared VM → dedicated VM at 5k users), app store fees, migration, and profit-after-deductions tables, see [`docs/PRODUCTION_MONTHLY_COSTING.md`](docs/PRODUCTION_MONTHLY_COSTING.md).
+
 
 **1. Estimated Gross Revenue (Per Month):**
 - **India (5,000 users):** Assuming an average distribution of companies on the Professional plan (e.g., 50 mid-sized companies): ~₹6,00,000 INR / month (approx. $7,200 USD).

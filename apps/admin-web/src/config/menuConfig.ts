@@ -35,6 +35,7 @@ export const profileNavItem: MenuItem = {
     { key: 'prof-info', label: 'Personal Info', path: '/ess/profile/info', allowedRoles: ALL_ROLES },
     { key: 'prof-bank', label: 'Bank Details', path: '/ess/profile/bank', allowedRoles: ALL_ROLES },
     { key: 'prof-assets', label: 'My Assets', path: '/ess/profile/assets', allowedRoles: ALL_ROLES },
+    { key: 'prof-work-location', label: 'Work Location', path: '/ess/profile/work-location', allowedRoles: ALL_ROLES },
   ],
 };
 
@@ -88,6 +89,7 @@ export const menuConfig: MenuSection[] = [
           { key: 'org-profile', label: 'Company Profile', path: '/organization/profile', allowedRoles: ['Company Admin'] },
           { key: 'org-legal', label: 'Legal Entities', path: '/organization/legal-entities', allowedRoles: ['Company Admin'] },
           { key: 'org-branches', label: 'Branches', path: '/organization/branches', allowedRoles: ['Company Admin'] },
+          { key: 'org-employee-types', label: 'Employee Types', path: '/organization/employee-types', allowedRoles: ['Company Admin', 'HR Admin'] },
           { key: 'org-departments', label: 'Departments', path: '/organization/departments', allowedRoles: ['Company Admin'] },
           { key: 'org-designations', label: 'Designations', path: '/organization/designations', allowedRoles: ['Company Admin'] },
         ]
@@ -116,7 +118,7 @@ export const menuConfig: MenuSection[] = [
         children: [
           { key: 'emp-directory', label: 'Directory', path: '/employees/directory', allowedRoles: ['Company Admin', 'HR Admin'] },
           { key: 'emp-add', label: 'Add Employee', path: '/employees/add', allowedRoles: ['HR Admin'] },
-          { key: 'emp-orgchart', label: 'Org Chart', path: '/employees/org-chart', allowedRoles: ['HR Admin'] },
+          { key: 'emp-orgchart', label: 'Org Chart', path: '/employees/org-chart', allowedRoles: ['Super Admin', 'Company Admin', 'HR Admin', 'Employee'] },
         ]
       },
       {
@@ -130,6 +132,7 @@ export const menuConfig: MenuSection[] = [
         key: 'attendance', label: 'Attendance & Shifts', icon: Clock, allowedRoles: ['HR Admin'],
         children: [
           { key: 'att-live', label: 'Live Tracking', path: '/attendance/live', allowedRoles: ['HR Admin'] },
+          { key: 'att-field', label: 'Field Tracking Map', path: '/attendance/field-tracking', allowedRoles: ['HR Admin', 'Company Admin', 'Super Admin'] },
           { key: 'att-rosters', label: 'Rosters', path: '/attendance/rosters', allowedRoles: ['HR Admin'] },
           { key: 'att-reg', label: 'Regularization Queue', path: '/attendance/regularization', allowedRoles: ['HR Admin'] },
         ]
@@ -410,6 +413,10 @@ export const menuConfig: MenuSection[] = [
           { key: 'perf-goals', label: 'My Goals', path: '/ess/performance/goals', allowedRoles: ['Employee'] },
           { key: 'perf-app', label: 'Self-Appraisal', path: '/ess/performance/appraisal', allowedRoles: ['Employee'] },
         ]
+      },
+      {
+        key: 'ess-orgchart', label: 'Organization', icon: Users, allowedRoles: ['Employee'],
+        path: '/employees/org-chart',
       },
     ]
   }

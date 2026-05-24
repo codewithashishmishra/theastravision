@@ -9,6 +9,7 @@ import api from '@/lib/axios';
 import { getStoredJurisdictions, type Jurisdiction } from '@/lib/jurisdiction';
 import { unwrapList } from '@/lib/hrmsApi';
 import { useAuthReady } from '@/lib/AuthProvider';
+import { formatRegionalDateTime } from '@/lib/formatDateTime';
 
 type DocRow = {
   id: string;
@@ -157,7 +158,7 @@ export function ComplianceHubPage({ title }: { title: string }) {
             {(docs ?? []).map((d) => (
               <div key={d.id} className="flex justify-between border-b border-divider py-2">
                 <span>{d.document_type} — FY {d.fiscal_year} ({d.jurisdiction})</span>
-                <span className="text-default-400">{new Date(d.generated_at).toLocaleString()}</span>
+                <span className="text-default-400">{formatRegionalDateTime(d.generated_at)}</span>
               </div>
             ))}
             {(docs ?? []).length === 0 && <p className="text-default-400">No documents generated yet.</p>}

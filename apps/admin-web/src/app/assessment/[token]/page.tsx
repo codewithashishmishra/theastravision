@@ -91,10 +91,10 @@ export default function AssessmentPage() {
   }, [cameraOk, data, captureProctor]);
 
   useEffect(() => {
-    if (!cameraOk || secondsLeft <= 0) return;
+    if (!cameraOk) return;
     const t = setInterval(() => setSecondsLeft((s) => Math.max(0, s - 1)), 1000);
     return () => clearInterval(t);
-  }, [cameraOk, secondsLeft]);
+  }, [cameraOk]);
 
   useEffect(() => {
     if (cameraOk && secondsLeft === 0 && data && !done) {

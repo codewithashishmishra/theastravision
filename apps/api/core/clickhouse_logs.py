@@ -1,4 +1,4 @@
-"""ClickHouse batched platform log storage (5000-row inserts)."""
+"""ClickHouse batched platform log storage (optional; disabled when CLICKHOUSE_ENABLED=False)."""
 
 from __future__ import annotations
 

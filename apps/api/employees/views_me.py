@@ -2,11 +2,13 @@ from rest_framework import status
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
+from django.utils import timezone
 
 from assets.models import AssetAssignment
 from core.tenant_utils import attach_tenant_to_request, get_employee_for_user
 
-from .models import Employee, EmployeeBank, EmployeeContact
+from .models import Employee, EmployeeBank, EmployeeContact, EmployeeWorkLocation
+from .serializers_types import EmployeeWorkLocationSerializer
 from .serializers_me import (
     EmployeeBankMeSerializer,
     EmployeeContactMeSerializer,
@@ -144,3 +146,29 @@ class EmployeeMeAssetsView(APIView):
             .order_by('-assigned_date')
         )
         return Response(MyAssetSerializer(assignments, many=True).data)
+
+
+class EmployeeMeWorkLocationView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        attach_tenant_to_request(request)
+        employee = get_employee_for_user(request.user)
+        if not employee:
+            return Response({'detail': 'No employee profile linked to this account.'}, status=404)
+        obj, _ = EmployeeWorkLocation.objects.get_or_create(employee=employee, tenant_id=employee.tenant_id)
+        return Response(EmployeeWorkLocationSerializer(obj).data)
+
+    def patch(self, request):
+        attach_tenant_to_request(request)
+        employee = get_employee_for_user(request.user)
+        if not employee:
+            return Response({'detail': 'No employee profile linked to this account.'}, status=404)
+        obj, _ = EmployeeWorkLocation.objects.get_or_create(employee=employee, tenant_id=employee.tenant_id)
+        ser = EmployeeWorkLocationSerializer(obj, data=request.data, partial=True)
+        ser.is_valid(raise_exception=True)
+        instance = ser.save()
+        if instance.has_home_coordinates() and instance.completed_at is None:
+            instance.completed_at = timezone.now()
+            instance.save(update_fields=['completed_at', 'updated_at'])
+        return Response(EmployeeWorkLocationSerializer(instance).data)

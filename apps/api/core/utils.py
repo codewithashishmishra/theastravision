@@ -1,4 +1,9 @@
+import ipaddress
+
 import requests
+
+IP_GEO_API_TIMEOUT = 2
+
 
 def get_client_ip(request):
     x_forwarded_for = request.META.get('HTTP_X_FORWARDED_FOR')
@@ -8,19 +13,44 @@ def get_client_ip(request):
         ip = request.META.get('REMOTE_ADDR')
     return ip
 
-def get_geo_location(ip):
-    # For local testing, return default or use a public free API
-    if not ip or ip == '127.0.0.1' or ip == 'localhost':
-        return "Local City", "Localhost"
-        
+
+def _is_private_or_local_ip(ip: str | None) -> bool:
+    if not ip or ip in ('127.0.0.1', 'localhost'):
+        return True
     try:
-        # Timeout quickly to avoid blocking login flow
-        response = requests.get(f"http://ip-api.com/json/{ip}", timeout=2)
+        addr = ipaddress.ip_address(ip.strip())
+        return addr.is_private or addr.is_loopback or addr.is_link_local
+    except ValueError:
+        return True
+
+
+def fetch_ip_geo(ip: str | None) -> dict | None:
+    """Fetch city, country, and timezone from ip-api.com. Returns None for local/private IPs."""
+    if _is_private_or_local_ip(ip):
+        return None
+
+    try:
+        response = requests.get(f"http://ip-api.com/json/{ip}", timeout=IP_GEO_API_TIMEOUT)
         if response.status_code == 200:
             data = response.json()
             if data.get('status') == 'success':
-                return data.get('city', 'Unknown'), data.get('country', 'Unknown')
+                return {
+                    'city': data.get('city', 'Unknown'),
+                    'country': data.get('country', 'Unknown'),
+                    'timezone': data.get('timezone'),
+                }
     except Exception:
         pass
-        
+
+    return None
+
+
+def get_geo_location(ip):
+    if _is_private_or_local_ip(ip):
+        return "Local City", "Localhost"
+
+    geo = fetch_ip_geo(ip)
+    if geo:
+        return geo.get('city', 'Unknown'), geo.get('country', 'Unknown')
+
     return "Unknown", "Unknown"

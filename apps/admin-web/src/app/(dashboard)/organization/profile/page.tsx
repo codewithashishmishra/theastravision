@@ -77,6 +77,35 @@ export default function OrganizationProfilePage() {
               >
                 Allow web punch
               </Switch>
+              <Input
+                label="Office start time"
+                type="time"
+                defaultValue={String(attSettings?.work_start_time ?? '09:00').slice(0, 5)}
+                onValueChange={(v) => saveAtt.mutate({ work_start_time: v })}
+              />
+              <Input
+                label="Office end time"
+                type="time"
+                defaultValue={String(attSettings?.work_end_time ?? '18:00').slice(0, 5)}
+                onValueChange={(v) => saveAtt.mutate({ work_end_time: v })}
+              />
+              <Input
+                label="Office timezone"
+                defaultValue={String(attSettings?.office_hours_timezone ?? 'UTC')}
+                onValueChange={(v) => saveAtt.mutate({ office_hours_timezone: v })}
+              />
+              <Input
+                label="Work days (ISO weekdays comma-separated, e.g. 1,2,3,4,5)"
+                defaultValue={(attSettings?.work_days ?? [1, 2, 3, 4, 5]).join(',')}
+                onValueChange={(v) =>
+                  saveAtt.mutate({
+                    work_days: v
+                      .split(',')
+                      .map((n) => Number(n.trim()))
+                      .filter((n) => Number.isInteger(n) && n >= 1 && n <= 7),
+                  })
+                }
+              />
             </CardBody>
           </Card>
         </>

@@ -1,4 +1,4 @@
-'use client';
+import { sanitizeHtml } from '@/lib/sanitizeHtml';
 
 import { useEffect, useState } from 'react';
 import { useParams } from 'next/navigation';
@@ -43,7 +43,7 @@ export default function AiInterviewReportDetailPage() {
         <Card>
           <CardBody
             className="prose prose-sm max-w-none dark:prose-invert"
-            dangerouslySetInnerHTML={{ __html: String(report.summary_html) }}
+            dangerouslySetInnerHTML={{ __html: sanitizeHtml(String(report.summary_html)) }}
           />
         </Card>
       ) : null}

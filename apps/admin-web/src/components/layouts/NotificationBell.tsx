@@ -1,11 +1,12 @@
 'use client';
 
-import React, { useEffect, useState, useCallback } from 'react';
+import React, { useEffect, useState, useCallback, useRef } from 'react';
 import { Button, Dropdown, DropdownTrigger, DropdownMenu, DropdownItem, Chip } from '@nextui-org/react';
 import { Bell } from 'lucide-react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { notificationsApi } from '@/lib/hrmsApi';
 import { unwrapList } from '@/lib/hrmsApi';
+import { getAccessToken } from '@/lib/tokenStore';
 
 type Notification = {
   id: string;
@@ -16,14 +17,25 @@ type Notification = {
 };
 
 function wsUrl() {
-  const token = typeof window !== 'undefined' ? localStorage.getItem('access_token') : '';
+  const token = typeof window !== 'undefined' ? getAccessToken() : '';
   const base = process.env.NEXT_PUBLIC_WS_URL || 'ws://127.0.0.1:8000';
   return `${base}/ws/notifications/?token=${token}`;
 }
 
+const REST_POLL_MS = 60_000;
+
 export function NotificationBell() {
   const queryClient = useQueryClient();
   const [live, setLive] = useState<Notification[]>([]);
+  const [wsConnected, setWsConnected] = useState(false);
+  const invalidateTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const scheduleUnreadInvalidate = useCallback(() => {
+    if (invalidateTimerRef.current) clearTimeout(invalidateTimerRef.current);
+    invalidateTimerRef.current = setTimeout(() => {
+      queryClient.invalidateQueries({ queryKey: ['notifications-unread'] });
+    }, 500);
+  }, [queryClient]);
 
   const { data } = useQuery({
     queryKey: ['notifications'],
@@ -31,7 +43,7 @@ export function NotificationBell() {
       const res = await notificationsApi.list();
       return unwrapList<Notification>(res.data);
     },
-    refetchInterval: 60000,
+    refetchInterval: wsConnected ? false : REST_POLL_MS,
   });
 
   const { data: unreadData } = useQuery({
@@ -40,7 +52,7 @@ export function NotificationBell() {
       const res = await notificationsApi.unreadCount();
       return res.data.count as number;
     },
-    refetchInterval: 30000,
+    refetchInterval: wsConnected ? false : REST_POLL_MS,
   });
 
   const markRead = useMutation({
@@ -54,29 +66,71 @@ export function NotificationBell() {
   const items = live.length ? live : (data ?? []);
   const unread = unreadData ?? items.filter((n) => !n.is_read).length;
 
-  const onMessage = useCallback((n: Notification) => {
-    setLive((prev) => [n, ...prev.filter((x) => x.id !== n.id)].slice(0, 50));
-    queryClient.invalidateQueries({ queryKey: ['notifications-unread'] });
-  }, [queryClient]);
+  const onMessage = useCallback(
+    (n: Notification) => {
+      setLive((prev) => [n, ...prev.filter((x) => x.id !== n.id)].slice(0, 50));
+      scheduleUnreadInvalidate();
+    },
+    [scheduleUnreadInvalidate]
+  );
 
   useEffect(() => {
-    const token = localStorage.getItem('access_token');
+    const token = getAccessToken();
     if (!token) return;
+
     let ws: WebSocket | null = null;
-    try {
-      ws = new WebSocket(wsUrl());
-      ws.onerror = () => {};
-      ws.onmessage = (ev) => {
-        const payload = JSON.parse(ev.data);
-        onMessage(payload);
-      };
-      ws.onclose = () => {
-        setTimeout(() => {}, 5000);
-      };
-    } catch {
-      /* REST fallback only */
-    }
-    return () => ws?.close();
+    let reconnectTimer: ReturnType<typeof setTimeout> | undefined;
+    let reconnectAttempt = 0;
+    let cancelled = false;
+
+    const connectWs = () => {
+      if (cancelled || (typeof document !== 'undefined' && document.hidden)) return;
+      try {
+        ws = new WebSocket(wsUrl());
+        ws.onopen = () => {
+          reconnectAttempt = 0;
+          setWsConnected(true);
+        };
+        ws.onerror = () => {};
+        ws.onmessage = (ev) => {
+          const payload = JSON.parse(ev.data);
+          onMessage(payload);
+        };
+        ws.onclose = () => {
+          setWsConnected(false);
+          if (cancelled) return;
+          const delay = Math.min(30_000, 5_000 * 2 ** reconnectAttempt);
+          reconnectAttempt += 1;
+          reconnectTimer = setTimeout(connectWs, delay);
+        };
+      } catch {
+        setWsConnected(false);
+      }
+    };
+
+    connectWs();
+
+    const onVisibility = () => {
+      if (document.hidden) {
+        ws?.close();
+        ws = null;
+        setWsConnected(false);
+        if (reconnectTimer) clearTimeout(reconnectTimer);
+      } else if (!cancelled) {
+        reconnectAttempt = 0;
+        connectWs();
+      }
+    };
+    document.addEventListener('visibilitychange', onVisibility);
+
+    return () => {
+      cancelled = true;
+      document.removeEventListener('visibilitychange', onVisibility);
+      if (reconnectTimer) clearTimeout(reconnectTimer);
+      if (invalidateTimerRef.current) clearTimeout(invalidateTimerRef.current);
+      ws?.close();
+      setWsConnected(false);
+    };
   }, [onMessage]);
 
   return (

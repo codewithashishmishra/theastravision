@@ -1,11 +1,13 @@
 from rest_framework import serializers
 
 from core.models import AuthSession, SystemAuditLog
+from core.serializer_fields import UtcDateTimeField
 
 
 class SystemAuditLogSerializer(serializers.ModelSerializer):
     user_email = serializers.SerializerMethodField()
     tenant_name = serializers.SerializerMethodField()
+    created_at = UtcDateTimeField(read_only=True)
 
     class Meta:
         model = SystemAuditLog
@@ -34,6 +36,7 @@ class AuthSessionSerializer(serializers.ModelSerializer):
     user_email = serializers.SerializerMethodField()
     tenant_id = serializers.SerializerMethodField()
     tenant_name = serializers.SerializerMethodField()
+    created_at = UtcDateTimeField(read_only=True)
 
     class Meta:
         model = AuthSession

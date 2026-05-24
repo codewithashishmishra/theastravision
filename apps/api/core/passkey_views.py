@@ -1,20 +1,18 @@
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated
+from django.conf import settings
 from webauthn import generate_registration_options, verify_registration_response, generate_authentication_options, verify_authentication_response
 from webauthn.helpers.structs import RegistrationCredential, AuthenticationCredential, AuthenticatorSelectionCriteria, UserVerificationRequirement
 from webauthn.helpers import options_to_json
-from .models import WebAuthnCredential, User, AuthSession
-from rest_framework_simplejwt.tokens import RefreshToken
-import os
+from .models import WebAuthnCredential, User
 import json
-from .utils import get_client_ip, get_geo_location
-from .auth_views import _set_refresh_cookie
+from .auth_views import _issue_login_response
 from .audit import system_audit_log
 
-RP_ID = "localhost"
-RP_NAME = "AastraaHR Enterprise"
-ORIGIN = "http://localhost:3000"
+RP_ID = settings.WEBAUTHN_RP_ID
+RP_NAME = settings.WEBAUTHN_RP_NAME
+ORIGIN = settings.WEBAUTHN_ORIGIN
 
 class PasskeyRegisterOptions(APIView):
     permission_classes = [IsAuthenticated]
@@ -130,34 +128,7 @@ class PasskeyLoginVerify(APIView):
             user.failed_login_attempts = 0
             user.locked_until = None
             user.save()
-            
-            ip = get_client_ip(request)
-            city, country = get_geo_location(ip)
-            refresh = RefreshToken.for_user(user)
-            AuthSession.objects.create(
-                user=user,
-                refresh_token_jti=refresh['jti'],
-                device_fingerprint=request.META.get('HTTP_USER_AGENT', 'Unknown'),
-                ip_address=ip,
-                user_agent=request.META.get('HTTP_USER_AGENT', 'Unknown'),
-                location_city=city,
-                location_country=country,
-                login_method='passkey'
-            )
-            system_audit_log(
-                request,
-                action="auth.login.success",
-                module="auth",
-                user=user,
-                metadata={"method": "passkey"},
-            )
-            
-            response = Response({
-                "access_token": str(refresh.access_token),
-                "user": {"id": str(user.id), "email": user.email, "method": "passkey"}
-            })
-            _set_refresh_cookie(response, str(refresh), request)
-            return response
+            return _issue_login_response(request, user, login_method='passkey')
             
         except Exception as e:
             return Response({"error": str(e)}, status=400)

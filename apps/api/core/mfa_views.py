@@ -1,8 +1,8 @@
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated
-from rest_framework_simplejwt.tokens import RefreshToken
-from .models import User, TOTPDevice, AuthSession
+from rest_framework.throttling import AnonRateThrottle
+from .models import User, TOTPDevice
 import pyotp
 import base64
 import numpy as np
@@ -12,9 +12,16 @@ try:
 except ImportError:
     face_recognition = None
 
-from .utils import get_client_ip, get_geo_location
-from .auth_views import _set_refresh_cookie
+from .auth_views import _issue_login_response
 from .audit import system_audit_log
+
+
+class MfaRateThrottle(AnonRateThrottle):
+    scope = 'auth_mfa'
+
+
+class FaceLoginRateThrottle(AnonRateThrottle):
+    scope = 'auth_face'
 
 class TOTPSetupView(APIView):
     permission_classes = [IsAuthenticated]
@@ -59,6 +66,7 @@ class TOTPVerifySetupView(APIView):
 
 class TOTPVerifyLoginView(APIView):
     permission_classes = []
+    throttle_classes = [MfaRateThrottle]
     
     def post(self, request):
         pre_auth_token = request.data.get('pre_auth_token')
@@ -79,34 +87,7 @@ class TOTPVerifyLoginView(APIView):
             
             totp = pyotp.TOTP(device.secret_key)
             if totp.verify(code):
-                # Success! Generate full tokens
-                ip = get_client_ip(request)
-                city, country = get_geo_location(ip)
-                refresh = RefreshToken.for_user(user)
-                AuthSession.objects.create(
-                    user=user,
-                    refresh_token_jti=refresh['jti'],
-                    device_fingerprint=request.META.get('HTTP_USER_AGENT', 'Unknown'),
-                    ip_address=ip,
-                    user_agent=request.META.get('HTTP_USER_AGENT', 'Unknown'),
-                    location_city=city,
-                    location_country=country,
-                    login_method='totp'
-                )
-                system_audit_log(
-                    request,
-                    action="auth.login.success",
-                    module="auth",
-                    user=user,
-                    metadata={"method": "totp"},
-                )
-                
-                response = Response({
-                    "access_token": str(refresh.access_token),
-                    "user": {"id": str(user.id), "email": user.email}
-                })
-                _set_refresh_cookie(response, str(refresh), request)
-                return response
+                return _issue_login_response(request, user, login_method='totp')
             else:
                 system_audit_log(
                     request,
@@ -123,6 +104,7 @@ class TOTPVerifyLoginView(APIView):
 
 class FaceLoginView(APIView):
     permission_classes = []
+    throttle_classes = [FaceLoginRateThrottle]
     
     def post(self, request):
         if not face_recognition:
@@ -135,11 +117,14 @@ class FaceLoginView(APIView):
             return Response({"error": "Email and image data required"}, status=400)
             
         user = User.objects.filter(email=email).first()
-        if not user:
-            return Response({"error": "User not found"}, status=404)
-            
-        if not user.face_encoding:
-            return Response({"error": "No face registered for this user"}, status=400)
+        if not user or not user.face_encoding:
+            system_audit_log(
+                request,
+                action="auth.login.failed",
+                module="auth",
+                metadata={"method": "face_scan", "reason": "invalid_credentials"},
+            )
+            return Response({"error": "Invalid credentials"}, status=401)
             
         try:
             # Decode Base64 image
@@ -173,39 +158,7 @@ class FaceLoginView(APIView):
             # But they likely meant "be lenient down to 70%". We will allow if similarity >= 60% (distance <= 0.4) 
             # or use the standard robust cutoff (distance <= 0.6). Let's use distance <= 0.6 to be safe and lenient.
             if distance <= 0.6:
-                # Face matched! Login the user
-                user.failed_login_attempts = 0
-                user.locked_until = None
-                user.save()
-                
-                ip = get_client_ip(request)
-                city, country = get_geo_location(ip)
-                refresh = RefreshToken.for_user(user)
-                
-                AuthSession.objects.create(
-                    user=user,
-                    refresh_token_jti=refresh['jti'],
-                    device_fingerprint=request.META.get('HTTP_USER_AGENT', 'Unknown'),
-                    ip_address=ip,
-                    user_agent=request.META.get('HTTP_USER_AGENT', 'Unknown'),
-                    location_city=city,
-                    location_country=country,
-                    login_method='face_scan'
-                )
-                system_audit_log(
-                    request,
-                    action="auth.login.success",
-                    module="auth",
-                    user=user,
-                    metadata={"method": "face_scan", "match_percentage": match_percentage},
-                )
-                
-                response = Response({
-                    "access_token": str(refresh.access_token),
-                    "user": {"id": str(user.id), "email": user.email, "method": "face_scan"}
-                })
-                _set_refresh_cookie(response, str(refresh), request)
-                return response
+                return _issue_login_response(request, user, login_method='face_scan')
             else:
                 user.failed_login_attempts += 1
                 user.save()

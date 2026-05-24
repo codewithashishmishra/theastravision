@@ -3,6 +3,11 @@
 from django.conf import settings
 
 MODULE_PLATFORM_UTILIZATION = "PLATFORM_UTILIZATION"
+MODULE_FRONTEND_DEBUG = "FRONTEND_DEBUG"
+
+_FRONTEND_DEBUG_DEFAULTS = {
+    "enabled": False,
+}
 
 _DEFAULTS = {
     "enabled": True,
@@ -82,3 +87,17 @@ def cooldown_message() -> str:
         cfg.get("cooldown_message")
         or "System is cooling down. Please retry in about 5 minutes."
     )
+
+
+def get_frontend_debug_config() -> dict:
+    from core.models import EnvConfiguration
+
+    merged = {**_FRONTEND_DEBUG_DEFAULTS}
+    db_config = EnvConfiguration.get_cached_config(MODULE_FRONTEND_DEBUG)
+    if db_config:
+        merged.update(db_config)
+    return merged
+
+
+def frontend_debug_enabled() -> bool:
+    return _as_bool(get_frontend_debug_config().get("enabled"), False)

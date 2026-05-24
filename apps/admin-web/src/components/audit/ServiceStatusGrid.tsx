@@ -1,6 +1,7 @@
 'use client';
 
 import { Chip } from '@nextui-org/react';
+import { formatUtcDateTime } from '@/lib/formatDateTime';
 
 type Service = {
   service: string;
@@ -27,7 +28,7 @@ export function ServiceStatusGrid({ services }: { services: Service[] }) {
         <div key={svc.service} className="border border-divider rounded-lg p-3 flex flex-col gap-2">
           <span className="font-semibold text-sm">{svc.service}</span>
           <Chip size="sm" color={stateColor(svc.state)} variant="flat">{svc.state}</Chip>
-          {svc.uptime && <span className="text-xs text-default-400 truncate" title={svc.uptime}>Since {new Date(svc.uptime).toLocaleString()}</span>}
+          {svc.uptime && <span className="text-xs text-default-400 truncate" title={svc.uptime}>Since {formatUtcDateTime(svc.uptime)}</span>}
           <span className="text-xs text-default-400">{svc.backend}</span>
         </div>
       ))}

@@ -5,6 +5,7 @@ import { Card, CardBody, Table, TableBody, TableCell, TableColumn, TableHeader, 
 import ScreenshotGallery from '@/components/wfh/ScreenshotGallery';
 import { parseApiError } from '@/lib/parseApiError';
 import { wfhApi } from '@/lib/wfhApi';
+import { formatRegionalDateTime } from '@/lib/formatDateTime';
 
 type Session = {
   id: string;
@@ -55,7 +56,7 @@ export default function HRWFHSessionsPage() {
             <TableBody emptyContent="No work sessions yet. Start tracking from the desktop app.">
               {sessions.map((s) => (
                 <TableRow key={s.id}>
-                  <TableCell>{new Date(s.start_time).toLocaleString()}</TableCell>
+                  <TableCell>{formatRegionalDateTime(s.start_time)}</TableCell>
                   <TableCell>{s.employee_name || '—'}</TableCell>
                   <TableCell className="max-w-xs truncate">{s.task_title || '—'}</TableCell>
                   <TableCell>{s.status}</TableCell>

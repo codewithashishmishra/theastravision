@@ -5,12 +5,16 @@ from django.conf import settings
 from django.contrib.auth import authenticate
 from django.utils import timezone
 from datetime import timedelta
-from rest_framework_simplejwt.tokens import RefreshToken
+from rest_framework_simplejwt.tokens import RefreshToken, AccessToken
+from rest_framework_simplejwt.token_blacklist.models import BlacklistedToken, OutstandingToken
 from rest_framework.throttling import AnonRateThrottle
 from .models import User, AuthSession, UserRoleMapping
+from .auth_utils import mfa_setup_required_response, user_has_verified_mfa, user_requires_mfa
 import uuid
 from .utils import get_client_ip, get_geo_location
 from .audit import system_audit_log
+from .timezone_utils import resolve_viewing_timezone
+from core.e2ee.services import bind_session_to_auth, delete_session, load_session_aes_key, wrap_auth_session_key
 
 
 def _get_refresh_token_from_request(request):
@@ -44,7 +48,7 @@ def get_user_role_names(user):
     )
 
 
-def serialize_auth_me(user):
+def serialize_auth_me(user, request=None):
     roles = get_user_role_names(user)
     tenant_payload = None
     if user.tenant_id:
@@ -55,17 +59,128 @@ def serialize_auth_me(user):
             'email_domain': tenant.email_domain or '',
             'enabled_jurisdictions': tenant.enabled_jurisdictions or ['IN'],
             'default_currency': tenant.default_currency or 'INR',
+            'subscription_plan': tenant.subscription_plan or 'starter',
         }
     display_name = (user.get_full_name() or '').strip() or user.email
-    return {
+    viewing_timezone = str(resolve_viewing_timezone(request, user=user)) if request else None
+    payload = {
         'email': user.email,
         'display_name': display_name,
         'roles': roles,
         'tenant': tenant_payload,
     }
+    if viewing_timezone:
+        payload['viewing_timezone'] = viewing_timezone
+    return payload
 
 class LoginRateThrottle(AnonRateThrottle):
-    rate = '10/min'
+    scope = 'auth_login'
+
+
+class RefreshRateThrottle(AnonRateThrottle):
+    scope = 'auth_refresh'
+
+
+def _blacklist_token_jti(jti, user=None):
+    outstanding, _ = OutstandingToken.objects.get_or_create(
+        jti=jti,
+        defaults={
+            'user': user,
+            'token': '',
+            'created_at': timezone.now(),
+            'expires_at': timezone.now() + timedelta(days=1),
+        },
+    )
+    if user and outstanding.user_id is None:
+        outstanding.user = user
+        outstanding.save(update_fields=['user'])
+    BlacklistedToken.objects.get_or_create(token=outstanding)
+
+
+def _blacklist_request_access_token(request, user=None):
+    auth_header = request.META.get('HTTP_AUTHORIZATION', '')
+    if not auth_header.startswith('Bearer '):
+        return
+    try:
+        access = AccessToken(auth_header.split(' ', 1)[1])
+        _blacklist_token_jti(access['jti'], user=user)
+    except Exception:
+        pass
+
+
+def _issue_login_response(request, user, login_method='password', client_type='web'):
+    if user_requires_mfa(user) and not user_has_verified_mfa(user):
+        system_audit_log(
+            request,
+            action="auth.login.blocked",
+            module="auth",
+            user=user,
+            metadata={"reason": "mfa_setup_required"},
+        )
+        return mfa_setup_required_response()
+
+    ip = get_client_ip(request)
+    city, country = get_geo_location(ip)
+    refresh = RefreshToken.for_user(user)
+
+    auth_session = AuthSession.objects.create(
+        user=user,
+        refresh_token_jti=refresh['jti'],
+        device_fingerprint=request.META.get('HTTP_USER_AGENT', 'Unknown'),
+        ip_address=ip,
+        user_agent=request.META.get('HTTP_USER_AGENT', 'Unknown'),
+        location_city=city,
+        location_country=country,
+        login_method=login_method,
+        client_type=client_type,
+    )
+
+    client_ecdh = (
+        (request.data.get('client_ecdh_public') if hasattr(request, 'data') else None)
+        or request.META.get('HTTP_X_CLIENT_ECDH_PUBLIC', '').strip()
+        or None
+    )
+    e2ee_session_id = (
+        request.META.get('HTTP_X_E2EE_SESSION', '').strip()
+        or (request.data.get('e2ee_session_id') or '').strip()
+        or None
+    )
+    e2ee_meta = bind_session_to_auth(
+        e2ee_session_id,
+        client_ecdh,
+        user_id=str(user.id),
+        refresh_jti=str(refresh['jti']),
+        client_type=client_type,
+    )
+    if e2ee_meta:
+        sid = e2ee_meta.get('e2ee_session_id') or e2ee_session_id
+        loaded = load_session_aes_key(sid) if sid else None
+        if loaded:
+            aes_key, _ = loaded
+            auth_session.payload_key_wrapped = wrap_auth_session_key(aes_key)
+            auth_session.save(update_fields=['payload_key_wrapped'])
+
+    system_audit_log(
+        request,
+        action="auth.login.success",
+        module="auth",
+        user=user,
+        metadata={"method": login_method, "client_type": client_type},
+    )
+
+    response = Response({
+        "access_token": str(refresh.access_token),
+        "refresh_token": str(refresh),
+        "user": {
+            "id": str(user.id),
+            "email": user.email,
+            "first_name": user.first_name,
+            "last_name": user.last_name,
+        },
+        **(e2ee_meta or {}),
+    })
+    _set_refresh_cookie(response, str(refresh), request)
+    return response
 
 def generate_pre_auth_token(user_id):
     # For Phase 5 we use a highly restricted temporary token.
@@ -133,48 +248,11 @@ class LoginPasswordView(APIView):
             pre_auth_token = generate_pre_auth_token(user.id)
             return Response({"requires_totp": True, "pre_auth_token": pre_auth_token})
 
-        # Generate Full Tokens
-        ip = get_client_ip(request)
-        city, country = get_geo_location(ip)
-        refresh = RefreshToken.for_user(user)
-        
-        # Log the session
-        AuthSession.objects.create(
-            user=user,
-            refresh_token_jti=refresh['jti'],
-            device_fingerprint=request.META.get('HTTP_USER_AGENT', 'Unknown'),
-            ip_address=ip,
-            user_agent=request.META.get('HTTP_USER_AGENT', 'Unknown'),
-            location_city=city,
-            location_country=country,
-            login_method='password',
-            client_type='web',
-        )
-
-        system_audit_log(
-            request,
-            action="auth.login.success",
-            module="auth",
-            user=user,
-            metadata={"method": "password", "client_type": "web"},
-        )
-        
-        response = Response({
-            "access_token": str(refresh.access_token),
-            "refresh_token": str(refresh),
-            "user": {
-                "id": str(user.id),
-                "email": user.email,
-                "first_name": user.first_name,
-                "last_name": user.last_name
-            }
-        })
-        
-        _set_refresh_cookie(response, str(refresh), request)
-        return response
+        return _issue_login_response(request, user)
 
 class RefreshTokenView(APIView):
     permission_classes = []
+    throttle_classes = [RefreshRateThrottle]
     
     def post(self, request):
         refresh_token = _get_refresh_token_from_request(request)
@@ -198,28 +276,35 @@ class MeView(APIView):
     permission_classes = [IsAuthenticated]
 
     def get(self, request):
-        return Response(serialize_auth_me(request.user))
+        return Response(serialize_auth_me(request.user, request=request))
 
 
 class LogoutView(APIView):
     def post(self, request):
+        actor = request.user if getattr(request, 'user', None) and request.user.is_authenticated else None
         refresh_token = _get_refresh_token_from_request(request)
         if refresh_token:
             try:
                 token = RefreshToken(refresh_token)
                 session = AuthSession.objects.filter(refresh_token_jti=token['jti']).first()
                 if session:
+                    actor = session.user
                     session.is_revoked = True
                     session.save()
-                    system_audit_log(
-                        request,
-                        action="auth.logout",
-                        module="auth",
-                        user=session.user,
-                    )
+                token.blacklist()
+                system_audit_log(
+                    request,
+                    action="auth.logout",
+                    module="auth",
+                    user=actor,
+                )
             except Exception:
                 pass
-                
+
+        _blacklist_request_access_token(request, user=actor)
+
+        delete_session(request.META.get('HTTP_X_E2EE_SESSION', '').strip() or None)
+
         response = Response({"message": "Logged out successfully"})
         response.delete_cookie('refresh_token')
         return response

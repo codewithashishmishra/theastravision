@@ -10,6 +10,8 @@ from django.http import HttpResponse
 from django.utils import timezone
 
 from core.auth_views import get_user_role_names
+from core.frontend_debug_log import append_frontend_debug_entry
+from core.platform_config import frontend_debug_enabled
 from core.utilization import build_status_payload, read_host_metrics
 from core.metrics import get_summary_metrics, get_time_series, get_slow_endpoints
 from core.log_sources.factory import get_log_source
@@ -40,6 +42,27 @@ class PlatformStatusView(APIView):
 
     def get(self, request):
         return Response(build_status_payload())
+
+
+class FrontendDebugLogView(APIView):
+    """Ingest frontend HTTP debug entries when FRONTEND_DEBUG is enabled."""
+
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request):
+        if not frontend_debug_enabled():
+            return Response(status=204)
+
+        data = request.data
+        if not isinstance(data, dict):
+            return Response({"detail": "Invalid payload."}, status=400)
+
+        direction = data.get("direction")
+        if direction not in ("request", "response"):
+            return Response({"detail": "direction must be 'request' or 'response'."}, status=400)
+
+        append_frontend_debug_entry(data)
+        return Response(status=204)
 
 
 class PlatformMonitoringView(APIView):
@@ -160,7 +183,7 @@ class PlatformSystemLogsView(APIView):
             limit = 200
 
         if tenant_id:
-            from core.audit_clickhouse import _ch_filters_from_request
+            from core.audit_clickhouse import _ch_filters_from_request, fetch_logs_from_postgres
             from core.clickhouse_logs import clickhouse_enabled, query_tenant_logs
 
             if clickhouse_enabled():
@@ -169,6 +192,9 @@ class PlatformSystemLogsView(APIView):
                 filters["tenant_id"] = tenant_id
                 entries = query_tenant_logs(filters, limit=limit)
                 return Response({"results": entries, "count": len(entries), "source": "clickhouse"})
+
+            rows = fetch_logs_from_postgres(request, tenant_id=tenant_id, limit=limit)
+            return Response({"results": rows, "count": len(rows), "source": "postgres"})
 
         source = get_log_source()
         entries = source.tail(service=service, since=since, limit=limit, level=level, search=search)

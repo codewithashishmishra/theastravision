@@ -20,17 +20,26 @@ def get_user_from_token(raw_token):
 
 class NotificationConsumer(AsyncJsonWebsocketConsumer):
     async def connect(self):
-        token = self.scope['query_string'].decode().split('token=')[-1].split('&')[0] if self.scope.get('query_string') else ''
-        if not token:
+        try:
+            print("WS connect triggered")
+            token = self.scope['query_string'].decode().split('token=')[-1].split('&')[0] if self.scope.get('query_string') else ''
+            if not token:
+                print("WS connect: No token")
+                await self.close()
+                return
+            self.user = await get_user_from_token(token)
+            if not self.user:
+                print("WS connect: User not found for token")
+                await self.close()
+                return
+            self.group = f'user_{self.user.id}'
+            print(f"WS connect: Adding to group {self.group}")
+            await self.channel_layer.group_add(self.group, self.channel_name)
+            await self.accept()
+            print("WS connect: Accepted")
+        except Exception as e:
+            print(f"WS connect EXCEPTION: {e}")
             await self.close()
-            return
-        self.user = await get_user_from_token(token)
-        if not self.user:
-            await self.close()
-            return
-        self.group = f'user_{self.user.id}'
-        await self.channel_layer.group_add(self.group, self.channel_name)
-        await self.accept()
 
     async def disconnect(self, close_code):
         if hasattr(self, 'group'):

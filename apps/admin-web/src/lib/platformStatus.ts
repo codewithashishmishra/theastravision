@@ -9,6 +9,7 @@ export type PlatformStatus = {
   cpu_threshold: number;
   ram_threshold: number;
   near_threshold: boolean;
+  frontend_debug_enabled?: boolean;
 };
 
 export async function fetchPlatformStatus(): Promise<PlatformStatus> {

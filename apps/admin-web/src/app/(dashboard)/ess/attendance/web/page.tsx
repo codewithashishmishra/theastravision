@@ -20,6 +20,8 @@ export default function WebCheckInPage() {
   const [selfieBlob, setSelfieBlob] = useState<Blob | null>(null);
   const videoRef = useRef<HTMLVideoElement>(null);
   const [cameraOn, setCameraOn] = useState(false);
+  const [trackingActive, setTrackingActive] = useState(false);
+  const [trackingIntervalMinutes, setTrackingIntervalMinutes] = useState(10);
   const queryClient = useQueryClient();
 
   useEffect(() => {
@@ -67,6 +69,34 @@ export default function WebCheckInPage() {
       setCameraOn(false);
     },
   });
+
+  const fieldPingMutation = useMutation({
+    mutationFn: () => {
+      if (!location) return Promise.resolve(null);
+      return attendanceApi.fieldPings.create({
+        latitude: location.lat,
+        longitude: location.lng,
+        source: 'Web',
+      });
+    },
+  });
+
+  useEffect(() => {
+    if (!trackingActive || !isCheckedIn) return;
+    const id = setInterval(() => {
+      if (!navigator.geolocation) return;
+      navigator.geolocation.getCurrentPosition(
+        (pos) => {
+          const next = { lat: pos.coords.latitude, lng: pos.coords.longitude };
+          setLocation(next);
+          fieldPingMutation.mutate();
+        },
+        () => undefined,
+        { enableHighAccuracy: true }
+      );
+    }, Math.max(5, trackingIntervalMinutes) * 60 * 1000);
+    return () => clearInterval(id);
+  }, [trackingActive, trackingIntervalMinutes, isCheckedIn]);
 
   const startCamera = async () => {
     const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'user' } });
@@ -127,11 +157,28 @@ export default function WebCheckInPage() {
             className={`w-64 h-20 text-xl font-bold ${isCheckedIn ? 'bg-danger' : 'bg-primary'} text-white`}
             radius="full"
             isLoading={punchMutation.isPending}
-            onPress={() => punchMutation.mutate(isCheckedIn ? 'out' : 'in')}
+            onPress={() =>
+              punchMutation.mutate(isCheckedIn ? 'out' : 'in', {
+                onSuccess: (resp: any) => {
+                  const payload = resp?.data ?? {};
+                  if (isCheckedIn) {
+                    setTrackingActive(false);
+                  } else if (payload.tracking_active) {
+                    setTrackingActive(true);
+                    setTrackingIntervalMinutes(payload.interval_minutes || 10);
+                  }
+                },
+              })
+            }
             startContent={isCheckedIn ? <LogOut size={28} /> : <LogIn size={28} />}
           >
             {isCheckedIn ? 'PUNCH OUT' : 'PUNCH IN'}
           </Button>
+          {trackingActive && (
+            <Chip color="secondary" variant="flat" className="mt-4">
+              Location sharing active every {trackingIntervalMinutes} minutes
+            </Chip>
+          )}
         </CardBody>
       </Card>
 

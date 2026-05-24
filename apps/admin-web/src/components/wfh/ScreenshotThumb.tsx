@@ -1,10 +1,12 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Modal, ModalBody, ModalContent, ModalHeader, Spinner } from '@nextui-org/react';
 import { AxiosError } from 'axios';
 import { wfhApi } from '@/lib/wfhApi';
 import { parseApiError } from '@/lib/parseApiError';
+import { formatRegionalDateTime } from '@/lib/formatDateTime';
+import { acquireScreenshotSlot, releaseScreenshotSlot } from '@/lib/screenshotLoadQueue';
 
 type Props = {
   screenshotId: string;
@@ -35,49 +37,70 @@ async function blobToImageUrl(blob: Blob): Promise<string> {
 }
 
 export default function ScreenshotThumb({ screenshotId, monitor, capturedAt }: Props) {
+  const rootRef = useRef<HTMLDivElement>(null);
+  const [inView, setInView] = useState(false);
   const [url, setUrl] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(false);
   const [lightbox, setLightbox] = useState(false);
 
   useEffect(() => {
+    const el = rootRef.current;
+    if (!el) return;
+    const observer = new IntersectionObserver(
+      ([entry]) => setInView(entry.isIntersecting),
+      { rootMargin: '120px' }
+    );
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, []);
+
+  useEffect(() => {
+    if (!inView) return;
+
     let objectUrl: string | null = null;
     let cancelled = false;
 
     setLoading(true);
     setError(null);
-    setUrl(null);
 
-    wfhApi
-      .screenshotImage(screenshotId)
-      .then(async (res) => {
+    const load = async () => {
+      await acquireScreenshotSlot();
+      if (cancelled) {
+        releaseScreenshotSlot();
+        return;
+      }
+      try {
+        const res = await wfhApi.screenshotImage(screenshotId);
         if (cancelled) return;
         objectUrl = await blobToImageUrl(res.data);
         setUrl(objectUrl);
-      })
-      .catch((e: unknown) => {
+      } catch (e: unknown) {
         if (cancelled) return;
         let msg = parseApiError(e, 'Could not load screenshot');
         if (e instanceof AxiosError && e.response?.status === 422) {
           msg = 'Session encryption key missing — re-capture from an updated tracker.';
         }
         setError(msg);
-      })
-      .finally(() => {
+      } finally {
+        releaseScreenshotSlot();
         if (!cancelled) setLoading(false);
-      });
+      }
+    };
+
+    void load();
 
     return () => {
       cancelled = true;
       if (objectUrl) URL.revokeObjectURL(objectUrl);
     };
-  }, [screenshotId]);
+  }, [inView, screenshotId]);
 
   const timeLabel = new Date(capturedAt).toLocaleTimeString();
 
   return (
     <>
-      <div className="flex flex-col gap-1">
+      <div ref={rootRef} className="flex flex-col gap-1">
         <button
           type="button"
           className="aspect-video rounded-lg overflow-hidden bg-default-100 border border-divider relative w-full cursor-pointer focus:outline-none focus:ring-2 focus:ring-primary"
@@ -99,11 +122,12 @@ export default function ScreenshotThumb({ screenshotId, monitor, capturedAt }: P
               src={url}
               alt={`Monitor ${monitor} at ${timeLabel}`}
               className="w-full h-full object-cover"
+              loading="lazy"
             />
           )}
           {!loading && !error && !url && (
             <div className="absolute inset-0 flex items-center justify-center text-xs text-default-500">
-              No preview
+              {inView ? 'Loading…' : 'Scroll to load'}
             </div>
           )}
         </button>
@@ -116,7 +140,7 @@ export default function ScreenshotThumb({ screenshotId, monitor, capturedAt }: P
       <Modal isOpen={lightbox} onClose={() => setLightbox(false)} size="5xl">
         <ModalContent>
           <ModalHeader>
-            Monitor {monitor} — {new Date(capturedAt).toLocaleString()}
+            Monitor {monitor} — {formatRegionalDateTime(capturedAt)}
           </ModalHeader>
           <ModalBody className="pb-6">
             {url && (

@@ -27,7 +27,10 @@ def get_openai_credentials() -> dict:
 
 def _headers() -> dict:
     creds = get_openai_credentials()
-    headers = {'Content-Type': 'application/json'}
+    headers = {
+        'Content-Type': 'application/json',
+        'X-Internal-Service': 'django',
+    }
     if creds.get('api_key'):
         headers['X-OpenAI-Api-Key'] = creds['api_key']
         headers['X-OpenAI-Model'] = creds.get('model', 'gpt-5.4-mini')

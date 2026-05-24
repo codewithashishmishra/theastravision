@@ -6,6 +6,7 @@ from django.utils import timezone
 from attendance.models import AttendanceSettings, GeoFence, Shift
 from core.models import Tenant
 from employees.models import Employee
+from employees.services.employee_types import seed_employee_types_for_tenant, assign_default_employee_type
 from expenses.models import ExpenseCategory, ExpensePolicy
 from leave.models import LeaveType, LeavePolicy
 from notifications.models import NotificationPreference
@@ -70,8 +71,13 @@ class Command(BaseCommand):
                 'require_selfie': False,
                 'allow_web_punch': True,
                 'allow_regularization': True,
+                'work_start_time': '09:00',
+                'work_end_time': '18:00',
+                'work_days': [1, 2, 3, 4, 5],
+                'office_hours_timezone': 'UTC',
             },
         )
+        seed_employee_types_for_tenant(tenant.id)
 
         Shift.objects.get_or_create(
             tenant=tenant,
@@ -135,6 +141,7 @@ class Command(BaseCommand):
             )
 
         for emp in Employee.objects.filter(tenant=tenant).select_related('user')[:20]:
+            assign_default_employee_type(emp)
             if emp.user_id:
                 NotificationPreference.objects.get_or_create(
                     tenant=tenant,

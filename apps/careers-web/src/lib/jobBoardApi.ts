@@ -1,5 +1,7 @@
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://127.0.0.1:8000/api/v1';
 
+import { createE2EEClient, e2eeJsonFetch, getBrowserE2EEClient } from './e2ee/fetchDecrypt';
+
 export type PortalConfig = {
   tenant_name: string;
   slug: string;
@@ -32,10 +34,13 @@ function hostedBase(tenantSlug: string) {
   return `${API_BASE}/public/job-board/hosted/${tenantSlug}`;
 }
 
+/** Reuse one E2EE session for multiple server-side fetches on the same page. */
+export async function createJobBoardE2EEClient() {
+  return createE2EEClient();
+}
+
 export async function fetchPortalConfig(tenantSlug: string): Promise<PortalConfig> {
-  const res = await fetch(`${hostedBase(tenantSlug)}/config/`, { next: { revalidate: 60 } });
-  if (!res.ok) throw new Error('Career portal not found');
-  return res.json();
+  return e2eeJsonFetch<PortalConfig>(`${hostedBase(tenantSlug)}/config/`);
 }
 
 export async function fetchJobs(
@@ -44,18 +49,12 @@ export async function fetchJobs(
 ): Promise<JobListItem[]> {
   const qs = new URLSearchParams(params);
   const url = `${hostedBase(tenantSlug)}/jobs/${qs.toString() ? `?${qs}` : ''}`;
-  const res = await fetch(url, { next: { revalidate: 30 } });
-  if (!res.ok) throw new Error('Failed to load jobs');
-  const data = await res.json();
-  return data.results ?? [];
+  const data = await e2eeJsonFetch<{ results?: JobListItem[] } | JobListItem[]>(url);
+  return Array.isArray(data) ? data : data.results ?? [];
 }
 
 export async function fetchJob(tenantSlug: string, jobSlug: string): Promise<JobDetail> {
-  const res = await fetch(`${hostedBase(tenantSlug)}/jobs/${jobSlug}/`, {
-    next: { revalidate: 30 },
-  });
-  if (!res.ok) throw new Error('Job not found');
-  return res.json();
+  return e2eeJsonFetch<JobDetail>(`${hostedBase(tenantSlug)}/jobs/${jobSlug}/`);
 }
 
 export async function submitApplication(
@@ -63,11 +62,14 @@ export async function submitApplication(
   jobSlug: string,
   formData: FormData,
 ): Promise<{ status: string; message?: string; redirect_url?: string }> {
+  const client = getBrowserE2EEClient();
+  const headers = await client.getRequestHeaders();
   const res = await fetch(`${hostedBase(tenantSlug)}/jobs/${jobSlug}/apply/`, {
     method: 'POST',
     body: formData,
+    headers,
   });
-  const data = await res.json();
+  const data = await client.parseResponse<{ status: string; message?: string; redirect_url?: string; detail?: string }>(res);
   if (!res.ok) throw new Error(data.detail || 'Application failed');
   return data;
 }

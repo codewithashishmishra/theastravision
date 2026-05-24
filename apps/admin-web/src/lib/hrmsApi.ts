@@ -6,7 +6,14 @@ export const employeesApi = {
   create: (data: Record<string, unknown>) => api.post('/employees/employees/', data),
   update: (id: string, data: Record<string, unknown>) => api.put(`/employees/employees/${id}/`, data),
   delete: (id: string) => api.delete(`/employees/employees/${id}/`),
+  orgTree: () => api.get('/employees/employees/org-tree/'),
   search: (q: string) => api.get('/employees/employees/', { params: { search: q, page_size: 8 } }),
+  employeeTypes: {
+    list: () => api.get('/employees/employee-types/'),
+    create: (data: Record<string, unknown>) => api.post('/employees/employee-types/', data),
+    update: (id: string, data: Record<string, unknown>) => api.put(`/employees/employee-types/${id}/`, data),
+    delete: (id: string) => api.delete(`/employees/employee-types/${id}/`),
+  },
   documents: {
     list: (params?: Record<string, string>) => api.get('/employees/documents/', { params }),
     upload: (formData: FormData) =>
@@ -33,6 +40,8 @@ export const employeesApi = {
     update: (data: Record<string, unknown>) => api.patch('/employees/me/', data),
     bank: () => api.get('/employees/me/bank/'),
     assets: () => api.get('/employees/me/assets/'),
+    workLocation: () => api.get('/employees/me/work-location/'),
+    updateWorkLocation: (data: Record<string, unknown>) => api.patch('/employees/me/work-location/', data),
   },
 };
 
@@ -83,6 +92,11 @@ export const attendanceApi = {
       api.post('/attendance/logs/punch_in/', formData, { headers: { 'Content-Type': 'multipart/form-data' } }),
     punchOut: (formData: FormData) =>
       api.post('/attendance/logs/punch_out/', formData, { headers: { 'Content-Type': 'multipart/form-data' } }),
+  },
+  fieldPings: {
+    create: (data: Record<string, unknown>) => api.post('/attendance/field-pings/', data),
+    live: () => api.get('/attendance/field-pings/live/'),
+    trail: (params: Record<string, string>) => api.get('/attendance/field-pings/trail/', { params }),
   },
   regularizations: {
     list: () => api.get('/attendance/regularizations/'),

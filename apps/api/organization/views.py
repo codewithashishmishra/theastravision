@@ -1,6 +1,7 @@
 from rest_framework import viewsets
 from rest_framework.exceptions import ValidationError
 from core.permissions import IsAuthenticatedTenantUser
+from core.audit import AuditViewSetMixin
 from core.tenant_utils import attach_tenant_to_request, resolve_request_tenant_id
 from .models import CompanyProfile, LegalEntity, Branch, Department, Designation, Grade, CostCenter, BusinessUnit, CompanyCalendar, Holiday, EmployeeCodeSequence
 from .serializers import (
@@ -29,6 +30,12 @@ class BaseTenantViewSet(viewsets.ModelViewSet):
             raise ValidationError("No tenant assigned to your account.")
         serializer.save(tenant_id=tenant_id)
 
+
+class AuditedTenantViewSet(AuditViewSetMixin, BaseTenantViewSet):
+    """Tenant-scoped CRUD with SystemAuditLog entries."""
+
+    audit_module = "hrms"
+
 class CompanyProfileViewSet(BaseTenantViewSet):
     queryset = CompanyProfile.objects.all()
     serializer_class = CompanyProfileSerializer
@@ -43,6 +50,16 @@ class LegalEntityViewSet(BaseTenantViewSet):
 class BranchViewSet(BaseTenantViewSet):
     queryset = Branch.objects.all()
     serializer_class = BranchSerializer
+
+    def perform_create(self, serializer):
+        super().perform_create(serializer)
+        from organization.services.branch_geofence import sync_branch_geofence
+        sync_branch_geofence(serializer.instance)
+
+    def perform_update(self, serializer):
+        super().perform_update(serializer)
+        from organization.services.branch_geofence import sync_branch_geofence
+        sync_branch_geofence(serializer.instance)
 
 class DepartmentViewSet(BaseTenantViewSet):
     queryset = Department.objects.all()
