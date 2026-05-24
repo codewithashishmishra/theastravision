@@ -1,0 +1,2 @@
+TAX_AI_MONTHLY_LIMIT = 3
+TAX_AI_FEATURE = 'tax_tips'

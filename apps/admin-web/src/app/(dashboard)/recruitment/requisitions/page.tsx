@@ -1,10 +1,12 @@
 'use client';
 
-import { ResourcePage } from '@/components/crud/ResourcePage';
-import { resourcePageConfigs } from '@/config/resourcePageConfigs';
+import { JobsManager } from '@/components/recruitment/JobsManager';
 
-export default function Page() {
-  const config = resourcePageConfigs['org-departments'];
-  if (!config) return <div className="p-8">Configuration missing.</div>;
-  return <ResourcePage config={config} />;
+export default function RequisitionsPage() {
+  return (
+    <JobsManager
+      title="Job requisitions"
+      description="Create and manage hiring requisitions. Set status to Open before publishing to the career board."
+    />
+  );
 }

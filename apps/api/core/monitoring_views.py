@@ -1,13 +1,18 @@
+import csv
+import io
+
 import psutil
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated
 from django.db import connection
+from django.http import HttpResponse
 from django.utils import timezone
-from datetime import timedelta
 
 from core.auth_views import get_user_role_names
 from core.utilization import build_status_payload, read_host_metrics
+from core.metrics import get_summary_metrics, get_time_series, get_slow_endpoints
+from core.log_sources.factory import get_log_source
 from .models import AuthSession
 
 
@@ -18,6 +23,14 @@ class IsSuperAdminUser:
         if request.user.is_superuser:
             return True
         return "Super Admin" in get_user_role_names(request.user)
+
+
+def _is_it_admin(user):
+    if not user or not user.is_authenticated:
+        return False
+    if user.is_superuser:
+        return True
+    return "IT Admin" in get_user_role_names(user)
 
 
 class PlatformStatusView(APIView):
@@ -81,6 +94,7 @@ class PlatformMonitoringView(APIView):
             "methods": methods_breakdown,
         }
 
+        api_metrics = get_summary_metrics(minutes=60)
         status = build_status_payload()
         return Response(
             {
@@ -88,5 +102,105 @@ class PlatformMonitoringView(APIView):
                 "database": {"size_mb": db_size_mb},
                 "analytics": analytics,
                 "cooldown": status,
+                "api_metrics": {
+                    "error_rate_percent": api_metrics["error_rate_percent"],
+                    "p50_latency_ms": api_metrics["p50_latency_ms"],
+                    "p95_latency_ms": api_metrics["p95_latency_ms"],
+                    "total_requests_1h": api_metrics["total_requests"],
+                    "timeseries": api_metrics["timeseries"][-20:],
+                },
             }
         )
+
+
+class PlatformMetricsView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        if not IsSuperAdminUser().has_permission(request, self):
+            return Response({"detail": "Super Admin access required."}, status=403)
+
+        range_key = request.query_params.get("range", "1h")
+        summary = get_summary_metrics(minutes={"1h": 60, "24h": 1440, "7d": 10080}.get(range_key, 60))
+        return Response(
+            {
+                "range": range_key,
+                "summary": summary,
+                "timeseries": get_time_series(range_key),
+                "slow_endpoints": get_slow_endpoints(),
+            }
+        )
+
+
+class PlatformServicesView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        if not IsSuperAdminUser().has_permission(request, self) and not _is_it_admin(request.user):
+            return Response({"detail": "Super Admin or IT Admin access required."}, status=403)
+        source = get_log_source()
+        return Response({"services": source.service_status()})
+
+
+class PlatformSystemLogsView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        if not IsSuperAdminUser().has_permission(request, self) and not _is_it_admin(request.user):
+            return Response({"detail": "Super Admin or IT Admin access required."}, status=403)
+
+        service = request.query_params.get("service")
+        since = request.query_params.get("since")
+        level = request.query_params.get("level")
+        search = request.query_params.get("search")
+        tenant_id = request.query_params.get("tenant_id")
+        try:
+            limit = min(500, max(1, int(request.query_params.get("limit", 200))))
+        except (TypeError, ValueError):
+            limit = 200
+
+        if tenant_id:
+            from core.audit_clickhouse import _ch_filters_from_request
+            from core.clickhouse_logs import clickhouse_enabled, query_tenant_logs
+
+            if clickhouse_enabled():
+                filters = _ch_filters_from_request(request, log_type="audit")
+                filters.pop("log_type", None)
+                filters["tenant_id"] = tenant_id
+                entries = query_tenant_logs(filters, limit=limit)
+                return Response({"results": entries, "count": len(entries), "source": "clickhouse"})
+
+        source = get_log_source()
+        entries = source.tail(service=service, since=since, limit=limit, level=level, search=search)
+        return Response({"results": [e.to_dict() for e in entries], "count": len(entries), "source": "stream"})
+
+
+class PlatformSystemLogsExportView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        if not IsSuperAdminUser().has_permission(request, self) and not _is_it_admin(request.user):
+            return Response({"detail": "Super Admin or IT Admin access required."}, status=403)
+
+        fmt = request.query_params.get("format", "csv")
+        service = request.query_params.get("service")
+        since = request.query_params.get("since")
+        level = request.query_params.get("level")
+        search = request.query_params.get("search")
+
+        source = get_log_source()
+        entries = source.tail(service=service, since=since, limit=500, level=level, search=search)
+        rows = [e.to_dict() for e in entries]
+
+        if fmt == "json":
+            return Response(rows)
+
+        buffer = io.StringIO()
+        if rows:
+            writer = csv.DictWriter(buffer, fieldnames=rows[0].keys())
+            writer.writeheader()
+            for row in rows:
+                writer.writerow(row)
+        response = HttpResponse(buffer.getvalue(), content_type="text/csv")
+        response["Content-Disposition"] = 'attachment; filename="system-logs.csv"'
+        return response

@@ -84,26 +84,62 @@ def render_campaign_email(
     return subject, body_html, body_text
 
 
-def send_campaign_email(campaign, recipient, *, connection=None, include_tracking: bool = True) -> None:
+def send_campaign_email(
+    campaign,
+    recipient,
+    *,
+    connection=None,
+    include_tracking: bool = True,
+    is_followup: bool = False,
+) -> None:
+    from .models import ColdCampaignThreadMessage
+
     cfg = get_smtp_config()
     from_email = campaign.from_email or cfg.get('from_email') or cfg.get('user', '')
     from_name = campaign.from_name or cfg.get('from_name', 'The Astra Vision')
     if not from_email:
         raise ValueError('From email is not configured.')
 
+    if hasattr(recipient, 'ensure_outbound_message_id'):
+        msg_id = recipient.ensure_outbound_message_id()
+        if not recipient.outbound_message_id:
+            recipient.save(update_fields=['outbound_message_id'])
+    else:
+        msg_id = None
+
     subject, body_html, body_text = render_campaign_email(
-        campaign, recipient, include_tracking=include_tracking
+        campaign, recipient, include_tracking=include_tracking and not is_followup
     )
     conn = connection or build_smtp_connection()
+    reply_to = cfg.get('from_email') or from_email
+    imap_cfg = EnvConfiguration.get_cached_config('IMAP') or {}
+    if imap_cfg.get('user'):
+        reply_to = imap_cfg.get('user')
+
     msg = EmailMultiAlternatives(
         subject=subject,
         body=body_text,
         from_email=f'{from_name} <{from_email}>',
         to=[recipient.email],
+        reply_to=[reply_to],
         connection=conn,
     )
     msg.attach_alternative(body_html, 'text/html')
+    if msg_id:
+        msg.extra_headers['Message-ID'] = msg_id
     msg.send()
+
+    if getattr(recipient, 'pk', None):
+        from django.utils import timezone
+
+        ColdCampaignThreadMessage.objects.create(
+            recipient=recipient,
+            direction=ColdCampaignThreadMessage.DIRECTION_OUTBOUND,
+            subject=subject[:500],
+            body_text=body_text[:5000],
+            received_at=timezone.now(),
+            classification='followup' if is_followup else 'initial',
+        )
 
 
 # 1x1 transparent GIF

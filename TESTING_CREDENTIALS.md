@@ -42,7 +42,15 @@ python manage.py seed_wfh
 
 **Manager** — `manager@aastraa.com`
 
-**Recruiter** — `recruiter@aastraa.com`
+**Recruiter** — `recruiter@aastraa.com` (Career board: `/recruitment/career-portal` after Job Portal add-on is enabled)
+
+### Job Portal add-on (after `seed_dev`)
+
+- **Super Admin** enables add-on: `/tenants/addons` → select **Aastraa Demo** → toggle Job Portal.
+- **Hosted careers:** `http://localhost:3001/aastraa-demo` (run `npm run dev` in `apps/careers-web`).
+- **API key:** printed once when running `python manage.py seed_dev` (look for `Job Portal API key` in output).
+- **Public API:** `GET http://127.0.0.1:8000/api/v1/public/job-board/config/` with header `X-Job-Board-Key: <key>`.
+- **Sample job:** `senior-software-engineer` on demo tenant careers page.
 
 **Interviewer** — `interviewer@aastraa.com` (home: `/interviewer/upcoming`)
 

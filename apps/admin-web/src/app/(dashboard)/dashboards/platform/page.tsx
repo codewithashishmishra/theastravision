@@ -1,10 +1,13 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
-import { Card, CardBody, Progress, Chip } from "@nextui-org/react";
-import { Server, HardDrive, Cpu, Activity, Fingerprint, Lock, Mail, ScanFace, Database, AlertTriangle } from 'lucide-react';
-import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, BarChart, Bar, PieChart, Pie, Cell } from 'recharts';
+import { Card, CardBody, Progress, Chip, Button } from "@nextui-org/react";
+import Link from 'next/link';
+import { Server, HardDrive, Cpu, Activity, Fingerprint, Lock, Mail, ScanFace, Database, AlertTriangle, Clock } from 'lucide-react';
+import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell } from 'recharts';
 import { api } from '@/lib/api';
+import { auditApi } from '@/lib/auditApi';
+import { ServiceStatusGrid } from '@/components/audit/ServiceStatusGrid';
 
 const COLORS = {
   password: 'hsl(var(--nextui-primary))',
@@ -19,6 +22,7 @@ export default function PlatformDashboard() {
   
   // Historical CPU data for the mini-chart
   const [cpuHistory, setCpuHistory] = useState<any[]>([]);
+  const [services, setServices] = useState<any[]>([]);
 
   useEffect(() => {
     setIsClient(true);
@@ -30,15 +34,16 @@ export default function PlatformDashboard() {
         
         setCpuHistory(prev => {
           const newHist = [...prev, { time: new Date().toLocaleTimeString(), cpu: res.data.system.cpu_usage_percent }];
-          return newHist.slice(-20); // Keep last 20 points
+          return newHist.slice(-20);
         });
       } catch (err) {
         console.error("Failed to fetch monitoring stats", err);
       }
     };
+
+    auditApi.platformServices().then((r) => setServices(r.data.services || [])).catch(() => {});
     
     fetchStats();
-    // Poll every 3 seconds for htop feel
     const interval = setInterval(fetchStats, 3000);
     return () => clearInterval(interval);
   }, []);
@@ -108,7 +113,7 @@ export default function PlatformDashboard() {
             <div className="flex items-end justify-between">
               <p className="text-3xl font-bold text-foreground">{stats?.system?.cpu_usage_percent || 0}%</p>
             </div>
-            <Progress value={stats?.system?.cpu_usage_percent || 0} color={stats?.system?.cpu_usage_percent > 80 ? "danger" : "primary"} size="sm" className="mt-4" />
+            <Progress aria-label="CPU Usage" value={stats?.system?.cpu_usage_percent || 0} color={stats?.system?.cpu_usage_percent > 80 ? "danger" : "primary"} size="sm" className="mt-4" />
           </CardBody>
         </Card>
 
@@ -125,6 +130,7 @@ export default function PlatformDashboard() {
               <p className="text-sm text-default-500">{stats?.system?.ram_used_gb || 0} GB / {stats?.system?.ram_total_gb || 0} GB</p>
             </div>
             <Progress
+              aria-label="RAM Usage"
               value={stats?.system?.ram_usage_percent || 0}
               color={
                 (stats?.system?.ram_usage_percent || 0) >= (cooldown?.ram_threshold ?? 80)
@@ -149,7 +155,7 @@ export default function PlatformDashboard() {
               <p className="text-3xl font-bold text-foreground">{stats?.system?.disk_usage_percent || 0}%</p>
               <p className="text-sm text-default-500">{stats?.system?.disk_used_gb || 0} GB / {stats?.system?.disk_total_gb || 0} GB</p>
             </div>
-            <Progress value={stats?.system?.disk_usage_percent || 0} color="warning" size="sm" className="mt-4" />
+            <Progress aria-label="Disk Usage" value={stats?.system?.disk_usage_percent || 0} color="warning" size="sm" className="mt-4" />
           </CardBody>
         </Card>
 
@@ -168,6 +174,51 @@ export default function PlatformDashboard() {
 
       </div>
 
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+        <Card className="shadow-sm border border-divider bg-content1">
+          <CardBody className="p-6">
+            <div className="flex justify-between items-start mb-4">
+              <div className="p-3 bg-danger/10 text-danger rounded-xl"><AlertTriangle size={24} /></div>
+              <span className="text-xs font-bold text-default-500">API 1h</span>
+            </div>
+            <h3 className="text-default-500 text-sm font-medium mb-1">Error Rate</h3>
+            <p className="text-3xl font-bold text-foreground">{stats?.api_metrics?.error_rate_percent ?? 0}%</p>
+          </CardBody>
+        </Card>
+        <Card className="shadow-sm border border-divider bg-content1">
+          <CardBody className="p-6">
+            <div className="flex justify-between items-start mb-4">
+              <div className="p-3 bg-warning/10 text-warning rounded-xl"><Clock size={24} /></div>
+              <span className="text-xs font-bold text-default-500">P95</span>
+            </div>
+            <h3 className="text-default-500 text-sm font-medium mb-1">API Latency</h3>
+            <p className="text-3xl font-bold text-foreground">{stats?.api_metrics?.p95_latency_ms ?? 0} <span className="text-lg">ms</span></p>
+          </CardBody>
+        </Card>
+        <Card className="shadow-sm border border-divider bg-content1">
+          <CardBody className="p-6">
+            <div className="flex justify-between items-start mb-4">
+              <div className="p-3 bg-primary/10 text-primary rounded-xl"><Activity size={24} /></div>
+              <Button as={Link} href="/dashboards/system-audit" size="sm" variant="flat">Details</Button>
+            </div>
+            <h3 className="text-default-500 text-sm font-medium mb-1">Requests (1h)</h3>
+            <p className="text-3xl font-bold text-foreground">{stats?.api_metrics?.total_requests_1h ?? 0}</p>
+          </CardBody>
+        </Card>
+      </div>
+
+      {services.length > 0 && (
+        <Card className="shadow-sm border border-divider">
+          <CardBody className="p-6 flex flex-col gap-4">
+            <div className="flex justify-between items-center">
+              <h3 className="text-lg font-bold">Service status</h3>
+              <Button as={Link} href="/audit/system-logs" size="sm" variant="flat">View logs</Button>
+            </div>
+            <ServiceStatusGrid services={services} />
+          </CardBody>
+        </Card>
+      )}
+
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mt-4">
         
         {/* CPU CHART */}
@@ -177,7 +228,7 @@ export default function PlatformDashboard() {
               <Server className="text-primary" size={20}/> Hardware CPU Load History (Live)
             </h3>
             <div className="h-72 w-full">
-              <ResponsiveContainer width="100%" height="100%">
+              <ResponsiveContainer width="100%" height="100%" minHeight={1}>
                 <AreaChart data={cpuHistory} margin={{ top: 10, right: 30, left: 0, bottom: 0 }}>
                   <defs>
                     <linearGradient id="colorCpu" x1="0" y1="0" x2="0" y2="1">
@@ -207,7 +258,7 @@ export default function PlatformDashboard() {
             </h3>
             
             <div className="h-48 w-full relative mb-4">
-              <ResponsiveContainer width="100%" height="100%">
+              <ResponsiveContainer width="100%" height="100%" minHeight={1}>
                 <PieChart>
                   <Pie
                     data={authData}

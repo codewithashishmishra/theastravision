@@ -10,6 +10,7 @@ import os
 import json
 from .utils import get_client_ip, get_geo_location
 from .auth_views import _set_refresh_cookie
+from .audit import system_audit_log
 
 RP_ID = "localhost"
 RP_NAME = "AastraaHR Enterprise"
@@ -69,6 +70,7 @@ class PasskeyRegisterVerify(APIView):
                 sign_count=verification.sign_count,
                 name="Passkey Authenticator"
             )
+            system_audit_log(request, action="auth.passkey.register", module="auth")
             
             return Response({"message": "Passkey registered successfully"})
             
@@ -141,6 +143,13 @@ class PasskeyLoginVerify(APIView):
                 location_city=city,
                 location_country=country,
                 login_method='passkey'
+            )
+            system_audit_log(
+                request,
+                action="auth.login.success",
+                module="auth",
+                user=user,
+                metadata={"method": "passkey"},
             )
             
             response = Response({

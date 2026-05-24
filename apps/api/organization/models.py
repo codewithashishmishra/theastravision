@@ -1,6 +1,7 @@
 from django.db import models
 import uuid
 from core.models import Tenant
+from core.jurisdictions import JURISDICTION_CHOICES
 
 class BaseTenantModel(models.Model):
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
@@ -21,6 +22,28 @@ class CompanyProfile(BaseTenantModel):
     def __str__(self):
         return self.legal_name
 
+
+class LegalEntity(BaseTenantModel):
+    """Legal employer entity per jurisdiction (IN / US / CA)."""
+
+    jurisdiction = models.CharField(max_length=2, choices=JURISDICTION_CHOICES)
+    legal_name = models.CharField(max_length=255)
+    registration_number = models.CharField(max_length=100, null=True, blank=True)
+    tax_id = models.CharField(max_length=100, null=True, blank=True, help_text='GSTIN / EIN / BN')
+    payroll_account_ids = models.JSONField(default=dict, blank=True)
+    is_default_for_jurisdiction = models.BooleanField(default=False)
+
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(
+                fields=['tenant', 'jurisdiction', 'legal_name'],
+                name='uniq_legal_entity_tenant_jurisdiction_name',
+            ),
+        ]
+
+    def __str__(self):
+        return f'{self.legal_name} ({self.jurisdiction})'
+
 class Branch(BaseTenantModel):
     name = models.CharField(max_length=255)
     code = models.CharField(max_length=50)
@@ -31,6 +54,11 @@ class Branch(BaseTenantModel):
     timezone = models.CharField(max_length=100, default='UTC')
     is_head_office = models.BooleanField(default=False)
 
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(fields=['tenant', 'code'], name='uniq_branch_tenant_code'),
+        ]
+
     def __str__(self):
         return f"{self.name} ({self.code})"
 
@@ -40,12 +68,22 @@ class Department(BaseTenantModel):
     parent = models.ForeignKey('self', on_delete=models.SET_NULL, null=True, blank=True, related_name='sub_departments')
     head = models.ForeignKey('core.User', on_delete=models.SET_NULL, null=True, blank=True, related_name='managed_departments')
 
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(fields=['tenant', 'code'], name='uniq_department_tenant_code'),
+        ]
+
     def __str__(self):
         return self.name
 
 class Designation(BaseTenantModel):
     name = models.CharField(max_length=255)
     code = models.CharField(max_length=50)
+
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(fields=['tenant', 'code'], name='uniq_designation_tenant_code'),
+        ]
 
     def __str__(self):
         return self.name

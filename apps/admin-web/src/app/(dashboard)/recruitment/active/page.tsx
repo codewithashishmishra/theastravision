@@ -1,10 +1,14 @@
 'use client';
 
-import { ResourcePage } from '@/components/crud/ResourcePage';
-import { resourcePageConfigs } from '@/config/resourcePageConfigs';
+import { JobsManager } from '@/components/recruitment/JobsManager';
 
-export default function Page() {
-  const config = resourcePageConfigs['org-departments'];
-  if (!config) return <div className="p-8">Configuration missing.</div>;
-  return <ResourcePage config={config} />;
+export default function ActivePostingsPage() {
+  return (
+    <JobsManager
+      title="Active postings"
+      description="Open requisitions currently live or ready for the career board."
+      filter={{ status: 'Open' }}
+      showPublishActions
+    />
+  );
 }

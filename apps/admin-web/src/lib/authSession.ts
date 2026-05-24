@@ -6,6 +6,8 @@ export type AuthTenant = {
   id: string;
   name: string;
   email_domain: string;
+  enabled_jurisdictions: string[];
+  default_currency: string;
 };
 
 export type AuthMeResponse = {
@@ -30,10 +32,14 @@ export function persistAuthSession(user: AuthMeResponse): Role {
     localStorage.setItem('tenant_id', user.tenant.id);
     localStorage.setItem('tenant_name', user.tenant.name);
     localStorage.setItem('tenant_email_domain', user.tenant.email_domain);
+    localStorage.setItem('tenant_jurisdictions', JSON.stringify(user.tenant.enabled_jurisdictions ?? ['IN']));
+    localStorage.setItem('tenant_currency', user.tenant.default_currency ?? 'INR');
   } else {
     localStorage.removeItem('tenant_id');
     localStorage.removeItem('tenant_name');
     localStorage.removeItem('tenant_email_domain');
+    localStorage.removeItem('tenant_jurisdictions');
+    localStorage.removeItem('tenant_currency');
   }
   return primary;
 }
@@ -48,6 +54,8 @@ export function clearAuthSession(): void {
   localStorage.removeItem('tenant_id');
   localStorage.removeItem('tenant_name');
   localStorage.removeItem('tenant_email_domain');
+  localStorage.removeItem('tenant_jurisdictions');
+  localStorage.removeItem('tenant_currency');
 }
 
 export async function loadAndPersistAuthSession(): Promise<{

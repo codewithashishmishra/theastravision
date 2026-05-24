@@ -4,6 +4,7 @@ from rest_framework.views import APIView
 
 from core.permissions import IsAuthenticatedTenantUser
 from core.tenant_utils import attach_tenant_to_request, get_employee_for_user, resolve_tenant_id
+from core.models import AuthSession
 
 from assets.models import Asset
 from .kpi import base_kpis, payroll_kpis, finance_kpis, manager_kpis, employee_kpis
@@ -105,6 +106,34 @@ class RecruitmentDashboardView(BaseDashboardView):
 
 class AuditDashboardView(BaseDashboardView):
     def build_payload(self, tenant_id, request):
+        from core.models import SystemAuditLog
+        from django.utils import timezone
+        from datetime import timedelta
+
+        since = timezone.now() - timedelta(hours=24)
+        admin_qs = SystemAuditLog.objects.filter(tenant_id=tenant_id, created_at__gte=since)
+        failed_logins = admin_qs.filter(action="auth.login.failed").count()
+        admin_actions = admin_qs.filter(module__in=["iam", "auth", "config"]).count()
+        unique_ips = (
+            SystemAuditLog.objects.filter(tenant_id=tenant_id, created_at__gte=since)
+            .exclude(ip_address__isnull=True)
+            .values("ip_address")
+            .distinct()
+            .count()
+        )
+        policy_changes = admin_qs.filter(action__icontains="policy").count()
+        login_sessions = AuthSession.objects.filter(
+            user__tenant_id=tenant_id, created_at__gte=since
+        ).count()
+
         data = base_kpis(tenant_id)
-        data['dashboard'] = 'audit'
+        data.update({
+            "dashboard": "audit",
+            "failed_logins_24h": failed_logins,
+            "admin_actions_24h": admin_actions,
+            "unique_ips_24h": unique_ips,
+            "policy_changes_24h": policy_changes,
+            "login_sessions_24h": login_sessions,
+            "critical_anomalies": failed_logins,
+        })
         return data

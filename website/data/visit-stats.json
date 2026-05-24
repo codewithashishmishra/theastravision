@@ -1,0 +1,10 @@
+{
+  "site": "https://theastravision.com/",
+  "product": "AASTRAA HRMS",
+  "description": "Live counters are updated by assets/visit-stats.js on each page load. This file is the fallback shape when the API is unavailable.",
+  "date": null,
+  "daily": 0,
+  "total": 0,
+  "updatedAt": null,
+  "source": "countapi"
+}

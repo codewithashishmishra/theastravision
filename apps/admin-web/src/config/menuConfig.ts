@@ -2,10 +2,13 @@ import {
   LayoutDashboard, Users, Building, Settings, FileText,
   Calendar, CheckSquare, Clock, UsersRound, Globe, FileKey,
   Briefcase, Receipt, ShieldCheck, HelpCircle, Target, FilePlus,
-  LogOut, ClipboardList, HandCoins, MonitorCheck, BookOpen, UserPlus, Fingerprint, PieChart, BadgeIndianRupee, Stethoscope, Mail
+  LogOut, ClipboardList, HandCoins, MonitorCheck, BookOpen, UserPlus, Fingerprint, PieChart, BadgeIndianRupee, Stethoscope, Mail, Activity
 } from 'lucide-react';
 
 export type Role = 'Super Admin' | 'Company Admin' | 'HR Admin' | 'Payroll Admin' | 'Finance Admin' | 'IT Admin' | 'Manager' | 'Recruiter' | 'Interviewer' | 'Auditor' | 'Employee';
+export const ALL_ROLES: Role[] = ['Super Admin', 'Company Admin', 'HR Admin', 'Payroll Admin', 'Finance Admin', 'IT Admin', 'Manager', 'Recruiter', 'Interviewer', 'Auditor', 'Employee'];
+
+import type { Jurisdiction } from '@/lib/jurisdiction';
 
 export type MenuItem = {
   key: string;
@@ -13,12 +16,26 @@ export type MenuItem = {
   path?: string;
   icon?: any;
   allowedRoles: Role[];
+  jurisdictions?: Jurisdiction[];
   children?: MenuItem[];
 };
 
 export type MenuSection = {
   section: string;
   items: MenuItem[];
+};
+
+/** Pinned at bottom of sidebar — not included in scrollable menuConfig sections. */
+export const profileNavItem: MenuItem = {
+  key: 'ess-profile',
+  label: 'My Profile',
+  icon: UserPlus,
+  allowedRoles: ALL_ROLES,
+  children: [
+    { key: 'prof-info', label: 'Personal Info', path: '/ess/profile/info', allowedRoles: ALL_ROLES },
+    { key: 'prof-bank', label: 'Bank Details', path: '/ess/profile/bank', allowedRoles: ALL_ROLES },
+    { key: 'prof-assets', label: 'My Assets', path: '/ess/profile/assets', allowedRoles: ALL_ROLES },
+  ],
 };
 
 export const menuConfig: MenuSection[] = [
@@ -45,6 +62,7 @@ export const menuConfig: MenuSection[] = [
         children: [
           { key: 'all-companies', label: 'All Companies', path: '/tenants/companies', allowedRoles: ['Super Admin'] },
           { key: 'subscriptions', label: 'Subscriptions', path: '/tenants/subscriptions', allowedRoles: ['Super Admin'] },
+          { key: 'tenant-addons', label: 'Add-ons', path: '/tenants/addons', allowedRoles: ['Super Admin'] },
           { key: 'provisioning', label: 'Tenant Provisioning', path: '/tenants/provisioning', allowedRoles: ['Super Admin'] },
         ]
       },
@@ -56,6 +74,8 @@ export const menuConfig: MenuSection[] = [
         ]
       },
       { key: 'global-logs', label: 'Platform Audit Logs', path: '/audit/platform', icon: FileKey, allowedRoles: ['Super Admin'] },
+      { key: 'system-audit-dash', label: 'System Audit Dashboard', path: '/dashboards/system-audit', icon: Activity, allowedRoles: ['Super Admin'] },
+      { key: 'system-logs', label: 'System Log Explorer', path: '/audit/system-logs', icon: FileText, allowedRoles: ['Super Admin', 'IT Admin'] },
       { key: 'cold-email', label: 'Cold Email Campaigns', path: '/marketing/cold-campaigns', icon: Mail, allowedRoles: ['Super Admin'] },
     ]
   },
@@ -66,6 +86,7 @@ export const menuConfig: MenuSection[] = [
         key: 'organization', label: 'Organization', icon: Building, allowedRoles: ['Company Admin'],
         children: [
           { key: 'org-profile', label: 'Company Profile', path: '/organization/profile', allowedRoles: ['Company Admin'] },
+          { key: 'org-legal', label: 'Legal Entities', path: '/organization/legal-entities', allowedRoles: ['Company Admin'] },
           { key: 'org-branches', label: 'Branches', path: '/organization/branches', allowedRoles: ['Company Admin'] },
           { key: 'org-departments', label: 'Departments', path: '/organization/departments', allowedRoles: ['Company Admin'] },
           { key: 'org-designations', label: 'Designations', path: '/organization/designations', allowedRoles: ['Company Admin'] },
@@ -159,8 +180,10 @@ export const menuConfig: MenuSection[] = [
       {
         key: 'payroll-config', label: 'Payroll Config', icon: Settings, allowedRoles: ['Payroll Admin'],
         children: [
+          { key: 'pc-settings', label: 'Payroll Settings', path: '/payroll/settings', allowedRoles: ['Payroll Admin', 'Company Admin'] },
+          { key: 'pc-structures', label: 'Salary Structures', path: '/payroll/structures', allowedRoles: ['Payroll Admin', 'Company Admin'] },
           { key: 'pc-components', label: 'Salary Components', path: '/payroll/components', allowedRoles: ['Payroll Admin'] },
-          { key: 'pc-tax', label: 'Tax Regimes', path: '/payroll/tax-regimes', allowedRoles: ['Payroll Admin'] },
+          { key: 'pc-tax', label: 'Tax Declarations', path: '/payroll/tax-regimes', allowedRoles: ['Payroll Admin'] },
         ]
       },
       {
@@ -174,7 +197,9 @@ export const menuConfig: MenuSection[] = [
       {
         key: 'payroll-compliance', label: 'Statutory Compliance', icon: ShieldCheck, allowedRoles: ['Payroll Admin'],
         children: [
-          { key: 'comp-reports', label: 'PF, ESIC, PT, LWF', path: '/payroll/compliance', allowedRoles: ['Payroll Admin'] },
+          { key: 'comp-in', label: 'India (PF/ESIC/Form 16)', path: '/payroll/compliance', allowedRoles: ['Payroll Admin'], jurisdictions: ['IN'] },
+          { key: 'comp-us', label: 'USA (W-2/941)', path: '/payroll/compliance-us', allowedRoles: ['Payroll Admin'], jurisdictions: ['US'] },
+          { key: 'comp-ca', label: 'Canada (T4)', path: '/payroll/compliance-ca', allowedRoles: ['Payroll Admin'], jurisdictions: ['CA'] },
         ]
       },
       {
@@ -306,6 +331,7 @@ export const menuConfig: MenuSection[] = [
         children: [
           { key: 'job-reqs', label: 'Requisitions', path: '/recruitment/requisitions', allowedRoles: ['Recruiter'] },
           { key: 'job-active', label: 'Active Postings', path: '/recruitment/active', allowedRoles: ['Recruiter'] },
+          { key: 'job-career', label: 'Career Board', path: '/recruitment/career-portal', allowedRoles: ['Recruiter', 'HR Admin'] },
         ]
       },
       {
@@ -338,14 +364,6 @@ export const menuConfig: MenuSection[] = [
   {
     section: 'Self Service',
     items: [
-      {
-        key: 'ess-profile', label: 'My Profile', icon: UserPlus, allowedRoles: ['Employee'],
-        children: [
-          { key: 'prof-info', label: 'Personal Info', path: '/ess/profile/info', allowedRoles: ['Employee'] },
-          { key: 'prof-bank', label: 'Bank Details', path: '/ess/profile/bank', allowedRoles: ['Employee'] },
-          { key: 'prof-assets', label: 'My Assets', path: '/ess/profile/assets', allowedRoles: ['Employee'] },
-        ]
-      },
       {
         key: 'ess-attendance', label: 'Attendance', icon: Clock, allowedRoles: ['Employee'],
         children: [

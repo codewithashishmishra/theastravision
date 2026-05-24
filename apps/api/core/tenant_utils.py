@@ -21,3 +21,25 @@ def attach_tenant_to_request(request):
     tenant_id = resolve_tenant_id(request.user)
     request.tenant_id = tenant_id
     return tenant_id
+
+
+def resolve_request_tenant_id(request):
+    """Tenant for the current request: user/employee tenant, or superuser ?tenant_id= override."""
+    tenant_id = getattr(request, 'tenant_id', None) or resolve_tenant_id(request.user)
+    if tenant_id:
+        return tenant_id
+    if not request.user.is_authenticated or not request.user.is_superuser:
+        return None
+    raw = request.query_params.get('tenant_id')
+    if not raw:
+        return None
+    try:
+        import uuid
+        from core.models import Tenant
+
+        tid = uuid.UUID(str(raw))
+    except (ValueError, AttributeError):
+        return None
+    if Tenant.objects.filter(id=tid).exists():
+        return tid
+    return None

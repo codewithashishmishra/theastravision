@@ -1,10 +1,7 @@
 'use client';
 
-import { ResourcePage } from '@/components/crud/ResourcePage';
-import { resourcePageConfigs } from '@/config/resourcePageConfigs';
+import { EssPayslipsPage } from '@/components/payroll/EssPayslipsPage';
 
 export default function Page() {
-  const config = resourcePageConfigs['payroll-payslips'];
-  if (!config) return <div className="p-8">Configuration missing.</div>;
-  return <ResourcePage config={config} />;
+  return <EssPayslipsPage />;
 }

@@ -1,7 +1,10 @@
-import { menuConfig, MenuItem, Role } from '@/config/menuConfig';
+import { menuConfig, profileNavItem, MenuItem, Role } from '@/config/menuConfig';
 
 function collectMenuItems(): MenuItem[] {
-  const items: MenuItem[] = [];
+  const items: MenuItem[] = [profileNavItem];
+  if (profileNavItem.children) {
+    items.push(...profileNavItem.children);
+  }
   for (const section of menuConfig) {
     for (const item of section.items) {
       items.push(item);

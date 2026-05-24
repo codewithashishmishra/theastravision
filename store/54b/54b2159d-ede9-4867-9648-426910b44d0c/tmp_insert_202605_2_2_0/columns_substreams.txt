@@ -1,0 +1,48 @@
+columns substreams version: 1
+14 columns:
+1 substreams for column `id`:
+	id
+3 substreams for column `log_type`:
+	log_type.dict_prefix
+	log_type.dict
+	log_type
+2 substreams for column `tenant_id`:
+	tenant_id.sparse.idx
+	tenant_id
+3 substreams for column `tenant_name`:
+	tenant_name.null
+	tenant_name.size
+	tenant_name
+2 substreams for column `user_id`:
+	user_id.null
+	user_id
+3 substreams for column `user_email`:
+	user_email.null
+	user_email.size
+	user_email
+2 substreams for column `module`:
+	module.size
+	module
+2 substreams for column `action`:
+	action.size
+	action
+3 substreams for column `level`:
+	level.dict_prefix
+	level.dict
+	level
+3 substreams for column `service`:
+	service.dict_prefix
+	service.dict
+	service
+2 substreams for column `message`:
+	message.size
+	message
+3 substreams for column `ip_address`:
+	ip_address.null
+	ip_address.size
+	ip_address
+2 substreams for column `metadata`:
+	metadata.size
+	metadata
+1 substreams for column `created_at`:
+	created_at

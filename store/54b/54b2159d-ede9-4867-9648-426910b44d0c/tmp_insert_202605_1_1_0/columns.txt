@@ -1,0 +1,16 @@
+columns format version: 1
+14 columns:
+`id` UUID
+`log_type` LowCardinality(String)
+`tenant_id` UUID
+`tenant_name` Nullable(String)
+`user_id` Nullable(UUID)
+`user_email` Nullable(String)
+`module` String
+`action` String
+`level` LowCardinality(String)
+`service` LowCardinality(String)
+`message` String
+`ip_address` Nullable(String)
+`metadata` String
+`created_at` DateTime64(3, 'UTC')

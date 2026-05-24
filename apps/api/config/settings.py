@@ -32,13 +32,14 @@ INSTALLED_APPS = [
     'simple_history',
 
     # Local apps
-    'core',
+    'core.apps.CoreConfig',
     'organization',
     'employees',
     'attendance',
     'leave',
     'shifts',
     'payroll',
+    'compliance',
     'notifications',
     'recruitment',
     'wfh',
@@ -57,6 +58,11 @@ PUBLIC_API_BASE_URL = os.environ.get('PUBLIC_API_BASE_URL', 'http://127.0.0.1:80
 AI_SERVICE_BASE_URL = os.environ.get('AI_SERVICE_BASE_URL', 'http://127.0.0.1:8001')
 OPENAI_DEFAULT_MODEL = os.environ.get('OPENAI_MODEL', 'gpt-5.4-mini')
 FRONTEND_APP_URL = os.environ.get('FRONTEND_APP_URL', os.environ.get('NEXT_PUBLIC_APP_URL', 'http://localhost:3000'))
+CAREERS_APP_URL = os.environ.get('CAREERS_APP_URL', 'http://localhost:3001')
+JOB_BOARD_CDN_URL = os.environ.get(
+    'JOB_BOARD_CDN_URL',
+    f"{PUBLIC_API_BASE_URL.rstrip('/')}/static/job-board",
+)
 DEFAULT_FROM_EMAIL = os.environ.get('DEFAULT_FROM_EMAIL', 'noreply@aastraahr.com')
 
 ASGI_APPLICATION = 'config.asgi.application'
@@ -78,6 +84,26 @@ UTIL_COOLDOWN_SUPER_ADMIN_BYPASS = os.environ.get(
     "UTIL_COOLDOWN_SUPER_ADMIN_BYPASS", "False"
 ).lower() in ["true", "1", "yes"]
 
+METRICS_ENABLED = os.environ.get("METRICS_ENABLED", "True").lower() in ["true", "1", "yes"]
+METRICS_RETENTION_HOURS = int(os.environ.get("METRICS_RETENTION_HOURS", "72"))
+LOG_SOURCE = os.environ.get("LOG_SOURCE", "auto")
+LOG_DOCKER_COMPOSE_PROJECT = os.environ.get("LOG_DOCKER_COMPOSE_PROJECT", "theastravision")
+LOG_SERVICE_REGISTRY = {
+    "api": {"docker_container": f"{LOG_DOCKER_COMPOSE_PROJECT}-api-1", "journal_unit": "aastraahr-api.service"},
+    "celery-worker": {"docker_container": f"{LOG_DOCKER_COMPOSE_PROJECT}-celery-worker-1", "journal_unit": "aastraahr-celery.service"},
+    "celery-beat": {"docker_container": f"{LOG_DOCKER_COMPOSE_PROJECT}-celery-beat-1", "journal_unit": "aastraahr-celery-beat.service"},
+    "ai-service": {"docker_container": f"{LOG_DOCKER_COMPOSE_PROJECT}-ai-service-1", "journal_unit": "aastraahr-ai.service"},
+    "admin-web": {"docker_container": f"{LOG_DOCKER_COMPOSE_PROJECT}-admin-web-1", "journal_unit": "aastraahr-web.service"},
+}
+
+CLICKHOUSE_ENABLED = os.environ.get("CLICKHOUSE_ENABLED", "False").lower() in ["true", "1", "yes"]
+CLICKHOUSE_HOST = os.environ.get("CLICKHOUSE_HOST", "localhost")
+CLICKHOUSE_PORT = int(os.environ.get("CLICKHOUSE_PORT", "8123"))
+CLICKHOUSE_USER = os.environ.get("CLICKHOUSE_USER", "default")
+CLICKHOUSE_PASSWORD = os.environ.get("CLICKHOUSE_PASSWORD", "")
+CLICKHOUSE_DATABASE = os.environ.get("CLICKHOUSE_DATABASE", "default")
+CLICKHOUSE_BATCH_SIZE = int(os.environ.get("CLICKHOUSE_BATCH_SIZE", "5000"))
+
 MIDDLEWARE = [
     'corsheaders.middleware.CorsMiddleware',
     'core.middleware.cooldown_middleware.PlatformCooldownMiddleware',
@@ -89,6 +115,7 @@ MIDDLEWARE = [
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
     'simple_history.middleware.HistoryRequestMiddleware',
+    'core.middleware.request_metrics_middleware.RequestMetricsMiddleware',
 ]
 
 ROOT_URLCONF = 'config.urls'
@@ -130,7 +157,8 @@ USE_I18N = True
 USE_TZ = True
 
 STATIC_URL = 'static/'
-STATIC_ROOT = BASE_DIR / 'static'
+STATIC_ROOT = BASE_DIR / 'staticfiles'
+STATICFILES_DIRS = [BASE_DIR / 'static'] if (BASE_DIR / 'static').exists() else []
 MEDIA_URL = '/media/'
 MEDIA_ROOT = BASE_DIR / 'media'
 
@@ -174,6 +202,8 @@ CORS_ALLOW_ALL_ORIGINS = False
 CORS_ALLOWED_ORIGINS = [
     "http://localhost:3000",
     "http://127.0.0.1:3000",
+    "http://localhost:3001",
+    "http://127.0.0.1:3001",
 ]
 CORS_ALLOW_CREDENTIALS = True
 # Celery Configuration Options

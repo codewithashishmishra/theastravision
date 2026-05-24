@@ -16,6 +16,7 @@ import api from '@/lib/axios';
 const MODULE_UTIL = 'PLATFORM_UTILIZATION';
 const MODULE_SMTP = 'SMTP';
 const MODULE_AI = 'AI';
+const MODULE_IMAP = 'IMAP';
 
 type UtilizationConfig = {
   enabled: boolean;
@@ -43,6 +44,16 @@ type AiConfig = {
   provider: string;
   api_key: string;
   model: string;
+};
+
+type ImapConfig = {
+  host: string;
+  port: number;
+  use_ssl: boolean;
+  user: string;
+  password: string;
+  folder: string;
+  poll_interval_minutes: number;
 };
 
 type EnvConfigRow<T> = {
@@ -77,7 +88,17 @@ const SMTP_DEFAULTS: SmtpConfig = {
 const AI_DEFAULTS: AiConfig = {
   provider: 'openai',
   api_key: '',
-  model: 'gpt-5.4-mini',
+  model: 'gpt-4o-mini',
+};
+
+const IMAP_DEFAULTS: ImapConfig = {
+  host: 'imap.secureserver.net',
+  port: 993,
+  use_ssl: true,
+  user: 'sales@theastravision.com',
+  password: '',
+  folder: 'INBOX',
+  poll_interval_minutes: 5,
 };
 
 async function loadModule<T>(module: string, defaults: T): Promise<{ id: string | null; form: T }> {
@@ -89,6 +110,9 @@ async function loadModule<T>(module: string, defaults: T): Promise<{ id: string 
     }
     if (module === MODULE_AI && (merged as AiConfig).api_key) {
       (merged as AiConfig).api_key = '********';
+    }
+    if (module === MODULE_IMAP && (merged as ImapConfig).password) {
+      (merged as ImapConfig).password = '********';
     }
     return { id: res.data.id, form: merged };
   } catch {
@@ -130,13 +154,17 @@ export default function PlatformConfigPage() {
   const [aiId, setAiId] = useState<string | null>(null);
   const [aiForm, setAiForm] = useState<AiConfig>(AI_DEFAULTS);
 
+  const [imapId, setImapId] = useState<string | null>(null);
+  const [imapForm, setImapForm] = useState<ImapConfig>(IMAP_DEFAULTS);
+
   useEffect(() => {
     let cancelled = false;
     (async () => {
-      const [util, smtp, ai] = await Promise.all([
+      const [util, smtp, ai, imap] = await Promise.all([
         loadModule(MODULE_UTIL, UTIL_DEFAULTS),
         loadModule(MODULE_SMTP, SMTP_DEFAULTS),
         loadModule(MODULE_AI, AI_DEFAULTS),
+        loadModule(MODULE_IMAP, IMAP_DEFAULTS),
       ]);
       if (cancelled) return;
       setUtilId(util.id);
@@ -145,6 +173,8 @@ export default function PlatformConfigPage() {
       setSmtpForm(smtp.form);
       setAiId(ai.id);
       setAiForm(ai.form);
+      setImapId(imap.id);
+      setImapForm(imap.form);
       setLoading(false);
     })();
     return () => {
@@ -200,6 +230,27 @@ export default function PlatformConfigPage() {
       setMessage('AI settings saved.');
     } catch {
       setMessage('Failed to save AI settings.');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleSaveImap = async () => {
+    setSaving(true);
+    setMessage('');
+    try {
+      await saveModule(MODULE_IMAP, imapId, imapForm, ['password']);
+      if (!imapId) {
+        const res = await api.get<EnvConfigRow<ImapConfig>>(`/env-configs/${MODULE_IMAP}/`);
+        setImapId(res.data.id);
+        setImapForm({
+          ...imapForm,
+          password: res.data.decrypted_config.password ? '********' : '',
+        });
+      }
+      setMessage('IMAP settings saved (encrypted at rest).');
+    } catch {
+      setMessage('Failed to save IMAP settings.');
     } finally {
       setSaving(false);
     }
@@ -362,11 +413,61 @@ export default function PlatformConfigPage() {
           </Card>
         </Tab>
 
+        <Tab key="imap" title="IMAP (Replies)">
+          <Card className="border border-divider shadow-sm mt-4">
+            <CardBody className="gap-4 p-6">
+              <p className="text-sm text-default-500">
+                Inbound mailbox for cold campaign reply detection. Celery polls every 5 minutes.
+                GoDaddy: <strong>imap.secureserver.net</strong> port 993 SSL.
+              </p>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <Input
+                  label="IMAP host"
+                  value={imapForm.host}
+                  onValueChange={(v) => setImapForm((p) => ({ ...p, host: v }))}
+                />
+                <Input
+                  type="number"
+                  label="Port"
+                  value={String(imapForm.port)}
+                  onValueChange={(v) => setImapForm((p) => ({ ...p, port: Number(v) || 993 }))}
+                />
+                <Input
+                  label="Username"
+                  value={imapForm.user}
+                  onValueChange={(v) => setImapForm((p) => ({ ...p, user: v }))}
+                />
+                <Input
+                  type="password"
+                  label="Password"
+                  placeholder="Leave blank to keep current"
+                  value={imapForm.password === '********' ? '' : imapForm.password}
+                  onValueChange={(v) => setImapForm((p) => ({ ...p, password: v || '********' }))}
+                />
+                <Input
+                  label="Folder"
+                  value={imapForm.folder}
+                  onValueChange={(v) => setImapForm((p) => ({ ...p, folder: v }))}
+                />
+              </div>
+              <Switch
+                isSelected={imapForm.use_ssl}
+                onValueChange={(v) => setImapForm((p) => ({ ...p, use_ssl: v }))}
+              >
+                Use SSL
+              </Switch>
+              <Button color="primary" isLoading={saving} onPress={handleSaveImap}>
+                Save IMAP
+              </Button>
+            </CardBody>
+          </Card>
+        </Tab>
+
         <Tab key="ai" title="AI (Optional)">
           <Card className="border border-divider shadow-sm mt-4">
             <CardBody className="gap-4 p-6">
               <p className="text-sm text-default-500">
-                Optional OpenAI key for AI rewrite on cold email campaigns.
+                OpenAI key for cold email content generation (recommended model: gpt-4o-mini).
               </p>
               <Input
                 label="Provider"

@@ -6,9 +6,10 @@ from rest_framework_simplejwt.views import TokenObtainPairView, TokenRefreshView
 from drf_spectacular.views import SpectacularAPIView, SpectacularRedocView, SpectacularSwaggerView
 from rest_framework.routers import DefaultRouter
 
-from core.views import TenantViewSet, UserViewSet, RoleViewSet, PermissionViewSet, UserRoleMappingViewSet, EnvConfigurationViewSet
+from core.views import TenantViewSet, UserViewSet, RoleViewSet, PermissionViewSet, UserRoleMappingViewSet, EnvConfigurationViewSet, FeatureFlagViewSet
+from core.addon_views import TenantAddonViewSet
 from organization.views import (
-    CompanyProfileViewSet, BranchViewSet, DepartmentViewSet, DesignationViewSet, 
+    CompanyProfileViewSet, LegalEntityViewSet, BranchViewSet, DepartmentViewSet, DesignationViewSet, 
     GradeViewSet, CostCenterViewSet, BusinessUnitViewSet, 
     CompanyCalendarViewSet, HolidayViewSet, EmployeeCodeSequenceViewSet
 )
@@ -23,9 +24,12 @@ router.register(r'roles', RoleViewSet, basename='role')
 router.register(r'permissions', PermissionViewSet, basename='permission')
 router.register(r'user-roles', UserRoleMappingViewSet, basename='user-role')
 router.register(r'env-configs', EnvConfigurationViewSet, basename='env-config')
+router.register(r'feature-flags', FeatureFlagViewSet, basename='feature-flag')
+router.register(r'platform/tenant-addons', TenantAddonViewSet, basename='tenant-addon')
 
 # Organization
 router.register(r'company-profiles', CompanyProfileViewSet, basename='company-profile')
+router.register(r'legal-entities', LegalEntityViewSet, basename='legal-entity')
 router.register(r'branches', BranchViewSet, basename='branch')
 router.register(r'departments', DepartmentViewSet, basename='department')
 router.register(r'designations', DesignationViewSet, basename='designation')
@@ -62,6 +66,11 @@ urlpatterns = [
     # Platform Monitoring & cooldown status
     path('api/v1/platform/status/', monitoring_views.PlatformStatusView.as_view()),
     path('api/v1/platform/monitoring/', monitoring_views.PlatformMonitoringView.as_view()),
+    path('api/v1/platform/metrics/', monitoring_views.PlatformMetricsView.as_view()),
+    path('api/v1/platform/services/', monitoring_views.PlatformServicesView.as_view()),
+    path('api/v1/platform/system-logs/', monitoring_views.PlatformSystemLogsView.as_view()),
+    path('api/v1/platform/system-logs/export/', monitoring_views.PlatformSystemLogsExportView.as_view()),
+    path('api/v1/audit/', include('core.audit_urls')),
     
     # Original Legacy simplejwt fallback
     path('api/v1/auth/token/', TokenObtainPairView.as_view(), name='token_obtain_pair'),
@@ -73,8 +82,10 @@ urlpatterns = [
     path('api/v1/leave/', include('leave.urls')),
     path('api/v1/shifts/', include('shifts.urls')),
     path('api/v1/payroll/', include('payroll.urls')),
+    path('api/v1/compliance/', include('compliance.urls')),
     path('api/v1/notifications/', include('notifications.urls')),
     path('api/v1/recruitment/', include('recruitment.urls')),
+    path('api/v1/public/job-board/', include('recruitment.public_urls')),
     path('api/v1/wfh/', include('wfh.urls_hrms')),
     path('api/v1/tracker/', include('wfh.urls_tracker')),
     path('api/v1/onboarding/', include('onboarding.urls')),

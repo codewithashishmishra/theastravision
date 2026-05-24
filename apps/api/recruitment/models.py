@@ -26,6 +26,17 @@ class JobRequisition(BaseTenantModel):
         ('On Hold', 'On Hold'),
         ('Closed', 'Closed'),
     ]
+    EMPLOYMENT_TYPE_CHOICES = [
+        ('Full-time', 'Full-time'),
+        ('Part-time', 'Part-time'),
+        ('Contract', 'Contract'),
+        ('Intern', 'Intern'),
+    ]
+    WORK_MODE_CHOICES = [
+        ('On-site', 'On-site'),
+        ('Hybrid', 'Hybrid'),
+        ('Remote', 'Remote'),
+    ]
 
     title = models.CharField(max_length=200)
     department = models.ForeignKey(Department, on_delete=models.SET_NULL, null=True)
@@ -41,9 +52,51 @@ class JobRequisition(BaseTenantModel):
     auto_send_invite = models.BooleanField(default=False)
     voice_pass_threshold = models.PositiveIntegerField(default=60)
     interview_question_count = models.PositiveIntegerField(default=5)
+    # Career board / job portal fields
+    slug = models.SlugField(max_length=220, blank=True, default='')
+    is_published = models.BooleanField(default=False)
+    published_at = models.DateTimeField(null=True, blank=True)
+    employment_type = models.CharField(
+        max_length=50, choices=EMPLOYMENT_TYPE_CHOICES, default='Full-time'
+    )
+    work_mode = models.CharField(max_length=50, choices=WORK_MODE_CHOICES, default='On-site')
+    apply_deadline = models.DateField(null=True, blank=True)
+    external_apply_url = models.URLField(max_length=500, null=True, blank=True)
+    rich_description_html = models.TextField(blank=True, default='')
+
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(
+                fields=['tenant', 'slug'],
+                condition=~models.Q(slug=''),
+                name='uniq_job_slug_per_tenant',
+            ),
+        ]
 
     def __str__(self):
         return f"{self.title} ({self.status})"
+
+
+class TenantCareerPortalSettings(models.Model):
+    """Branding and API access for the public job board (Job Portal add-on)."""
+
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    tenant = models.OneToOneField(
+        'core.Tenant', on_delete=models.CASCADE, related_name='career_portal_settings'
+    )
+    slug = models.SlugField(max_length=100, unique=True)
+    api_key_hash = models.CharField(max_length=128)
+    api_key_prefix = models.CharField(max_length=16, help_text='Display prefix e.g. jb_live_ab12')
+    allowed_embed_origins = models.JSONField(default=list, blank=True)
+    logo_url = models.URLField(max_length=500, blank=True, default='')
+    primary_color = models.CharField(max_length=7, default='#2563eb')
+    company_blurb = models.TextField(blank=True, default='')
+    custom_domain = models.CharField(max_length=255, null=True, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    def __str__(self):
+        return f"Career portal: {self.slug}"
 
 
 class Candidate(BaseTenantModel):

@@ -1,6 +1,7 @@
 from django.db import models
 from core.models import Tenant, User
-from organization.models import BaseTenantModel, Branch, Department, Designation, Grade
+from core.jurisdictions import JURISDICTION_CHOICES, JURISDICTION_IN
+from organization.models import BaseTenantModel, Branch, Department, Designation, Grade, LegalEntity
 
 class Employee(BaseTenantModel):
     user = models.OneToOneField(User, on_delete=models.CASCADE, related_name='employee_profile', null=True, blank=True)
@@ -19,7 +20,19 @@ class Employee(BaseTenantModel):
     designation = models.ForeignKey(Designation, on_delete=models.SET_NULL, null=True, blank=True)
     grade = models.ForeignKey(Grade, on_delete=models.SET_NULL, null=True, blank=True)
     reporting_manager = models.ForeignKey('self', on_delete=models.SET_NULL, null=True, blank=True, related_name='reportees')
-    
+    payroll_jurisdiction = models.CharField(
+        max_length=2,
+        choices=JURISDICTION_CHOICES,
+        default=JURISDICTION_IN,
+    )
+    legal_entity = models.ForeignKey(
+        LegalEntity,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='employees',
+    )
+
     status = models.CharField(max_length=50, default='Active')
 
     def __str__(self):
@@ -43,12 +56,31 @@ class EmployeeBank(BaseTenantModel):
     account_type = models.CharField(max_length=50, default='Savings')
 
 class EmployeeTax(BaseTenantModel):
+    """Legacy India tax record — prefer EmployeeTaxProfile."""
+
     employee = models.OneToOneField(Employee, on_delete=models.CASCADE, related_name='tax_details')
     pan_number = models.CharField(max_length=20)
     aadhaar_number = models.CharField(max_length=20)
     uan_number = models.CharField(max_length=50, null=True, blank=True)
     pf_number = models.CharField(max_length=50, null=True, blank=True)
     esic_number = models.CharField(max_length=50, null=True, blank=True)
+
+
+class EmployeeTaxProfile(BaseTenantModel):
+    employee = models.ForeignKey(Employee, on_delete=models.CASCADE, related_name='tax_profiles')
+    jurisdiction = models.CharField(max_length=2, choices=JURISDICTION_CHOICES)
+    fields = models.JSONField(default=dict, blank=True)
+
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(
+                fields=['employee', 'jurisdiction'],
+                name='uniq_employee_tax_profile_jurisdiction',
+            ),
+        ]
+
+    def __str__(self):
+        return f'{self.employee_id} ({self.jurisdiction})'
 
 class EmployeeDocument(BaseTenantModel):
     employee = models.ForeignKey(Employee, on_delete=models.CASCADE, related_name='documents')

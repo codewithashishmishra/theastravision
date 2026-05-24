@@ -14,6 +14,21 @@ class Tenant(models.Model):
         blank=True,
         help_text="Email domain for users in this tenant (e.g. aastraa.com)",
     )
+    enabled_jurisdictions = models.JSONField(
+        default=list,
+        blank=True,
+        help_text="Payroll jurisdictions enabled for this tenant: IN, US, CA",
+    )
+    default_currency = models.CharField(max_length=3, default='INR')
+    fiscal_year_start_month = models.IntegerField(default=4)
+    variable_pay_enabled = models.BooleanField(
+        default=False,
+        help_text='Company-wide: allow variable pay component in salary structures',
+    )
+    allow_employee_variable_override = models.BooleanField(
+        default=True,
+        help_text='If true, per-employee variable_pay_enabled can override tenant default',
+    )
     is_active = models.BooleanField(default=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
@@ -21,6 +36,20 @@ class Tenant(models.Model):
 
     def __str__(self):
         return self.name
+
+    def save(self, *args, **kwargs):
+        from core.jurisdictions import (
+            default_currency_for_jurisdictions,
+            fiscal_start_month_for_jurisdiction,
+        )
+
+        if not self.enabled_jurisdictions:
+            self.enabled_jurisdictions = ['IN']
+        self.default_currency = default_currency_for_jurisdictions(self.enabled_jurisdictions)
+        self.fiscal_year_start_month = fiscal_start_month_for_jurisdiction(
+            self.enabled_jurisdictions[0]
+        )
+        super().save(*args, **kwargs)
 
 class User(AbstractUser):
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
@@ -84,6 +113,12 @@ class SystemAuditLog(models.Model):
 
     def __str__(self):
         return f"[{self.created_at}] {self.user} - {self.action}"
+
+    class Meta:
+        indexes = [
+            models.Index(fields=["tenant", "created_at"]),
+            models.Index(fields=["module", "created_at"]),
+        ]
 
 # ----------------- ADVANCED AUTHENTICATION MODELS -----------------
 
@@ -212,3 +247,43 @@ class EnvConfiguration(models.Model):
             return config.get_config()
         except EnvConfiguration.DoesNotExist:
             return {}
+
+class FeatureFlag(models.Model):
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    name = models.CharField(max_length=100, unique=True, help_text="e.g. ENABLE_NEW_UI")
+    description = models.TextField(null=True, blank=True)
+    is_active = models.BooleanField(default=False)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    def __str__(self):
+        return f"{self.name} - {'ON' if self.is_active else 'OFF'}"
+
+
+class TenantAddon(models.Model):
+    """Per-tenant product add-ons (enabled manually by Super Admin in v1)."""
+
+    ADDON_JOB_PORTAL = 'job_portal'
+
+    ADDON_CHOICES = [
+        (ADDON_JOB_PORTAL, 'Job Portal & Career Board SDK'),
+    ]
+
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    tenant = models.ForeignKey(Tenant, on_delete=models.CASCADE, related_name='addons')
+    addon_code = models.CharField(max_length=50, choices=ADDON_CHOICES)
+    enabled = models.BooleanField(default=False)
+    enabled_at = models.DateTimeField(null=True, blank=True)
+    enabled_by = models.ForeignKey(
+        User, on_delete=models.SET_NULL, null=True, blank=True, related_name='enabled_addons'
+    )
+    notes = models.TextField(blank=True, default='')
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        unique_together = ('tenant', 'addon_code')
+
+    def __str__(self):
+        state = 'ON' if self.enabled else 'OFF'
+        return f"{self.tenant.name} — {self.addon_code} ({state})"

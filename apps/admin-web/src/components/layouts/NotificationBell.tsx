@@ -65,6 +65,7 @@ export function NotificationBell() {
     let ws: WebSocket | null = null;
     try {
       ws = new WebSocket(wsUrl());
+      ws.onerror = () => {};
       ws.onmessage = (ev) => {
         const payload = JSON.parse(ev.data);
         onMessage(payload);

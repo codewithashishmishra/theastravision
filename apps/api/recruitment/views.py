@@ -42,6 +42,7 @@ from recruitment.serializers import (
     JobRequisitionSerializer,
     ProctorSnapshotSerializer,
 )
+from recruitment.career_portal_views import JobRequisitionCareerMixin
 from recruitment.services import (
     complete_voice_interview,
     create_ai_session,
@@ -63,10 +64,22 @@ def _client_ip(request):
     return request.META.get('REMOTE_ADDR')
 
 
-class JobRequisitionViewSet(BaseTenantViewSet):
+class JobRequisitionViewSet(JobRequisitionCareerMixin, BaseTenantViewSet):
     queryset = JobRequisition.objects.all()
     serializer_class = JobRequisitionSerializer
     parser_classes = [MultiPartParser, FormParser, JSONParser]
+
+    def get_queryset(self):
+        qs = super().get_queryset()
+        published = self.request.query_params.get('published')
+        if published == 'true':
+            qs = qs.filter(is_published=True)
+        elif published == 'false':
+            qs = qs.filter(is_published=False)
+        status_param = self.request.query_params.get('status')
+        if status_param:
+            qs = qs.filter(status=status_param)
+        return qs
 
     def perform_create(self, serializer):
         tenant_id = getattr(self.request, 'tenant_id', None)

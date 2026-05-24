@@ -6,6 +6,7 @@ from datetime import datetime, timedelta, timezone as dt_timezone
 import psutil
 import redis
 from django.utils import timezone
+from django.conf import settings
 
 from core.platform_config import (
     cooldown_duration_seconds,

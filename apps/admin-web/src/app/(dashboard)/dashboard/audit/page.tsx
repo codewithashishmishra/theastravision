@@ -1,10 +1,7 @@
 'use client';
 
-import { ResourcePage } from '@/components/crud/ResourcePage';
-import { resourcePageConfigs } from '@/config/resourcePageConfigs';
+import { redirect } from 'next/navigation';
 
-export default function Page() {
-  const config = resourcePageConfigs['audit-logins'];
-  if (!config) return <div className="p-8">Configuration missing.</div>;
-  return <ResourcePage config={config} />;
+export default function LegacyAuditDashboardPage() {
+  redirect('/dashboards/audit');
 }

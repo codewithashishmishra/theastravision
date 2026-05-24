@@ -42,6 +42,7 @@ export function ResourcePage({ config }: { config: ResourcePageConfig }) {
   const [editId, setEditId] = useState<string | null>(null);
   const [deleteId, setDeleteId] = useState<string | null>(null);
   const [formData, setFormData] = useState<Record<string, string>>({});
+  const [saveError, setSaveError] = useState<string | null>(null);
 
   const { data, isLoading, isFetching, refetch, error } = useQuery({
     queryKey: [config.queryKey, page, filter],
@@ -71,10 +72,14 @@ export function ResourcePage({ config }: { config: ResourcePageConfig }) {
       return api.post(config.endpoint, formData);
     },
     onSuccess: () => {
+      setSaveError(null);
       queryClient.invalidateQueries({ queryKey: [config.queryKey] });
       setModalOpen(false);
       setEditId(null);
       setFormData({});
+    },
+    onError: (err) => {
+      setSaveError(parseApiError(err, 'Failed to save'));
     },
   });
 
@@ -89,10 +94,12 @@ export function ResourcePage({ config }: { config: ResourcePageConfig }) {
   const openCreate = () => {
     setEditId(null);
     setFormData({});
+    setSaveError(null);
     setModalOpen(true);
   };
 
   const openEdit = (row: Record<string, unknown>) => {
+    setSaveError(null);
     setEditId(String(row.id));
     const initial: Record<string, string> = {};
     config.formFields?.forEach((f) => {
@@ -186,6 +193,10 @@ export function ResourcePage({ config }: { config: ResourcePageConfig }) {
         <Pagination total={Math.ceil(total / 10)} page={page} onChange={setPage} />
       )}
 
+      {saveError && (
+        <Chip color="danger" variant="flat">{saveError}</Chip>
+      )}
+
       {config.formFields && (
         <FormModal
           isOpen={modalOpen}
@@ -196,6 +207,7 @@ export function ResourcePage({ config }: { config: ResourcePageConfig }) {
           onChange={(k, v) => setFormData((p) => ({ ...p, [k]: v }))}
           onSubmit={() => saveMutation.mutate()}
           isLoading={saveMutation.isPending}
+          isDisabled={saveMutation.isPending}
         />
       )}
 

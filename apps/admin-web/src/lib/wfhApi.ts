@@ -24,5 +24,5 @@ export const wfhApi = {
     axios.get(`/wfh/screenshots/${screenshotId}/`, { responseType: 'blob' }),
   trackerSettings: () => axios.get('/wfh/admin/tracker-settings/'),
   trackerDevices: () => axios.get('/wfh/admin/tracker-devices/'),
-  auditLogs: () => axios.get('/wfh/admin/audit-logs/'),
+  auditLogs: (params?: Record<string, unknown>) => axios.get('/wfh/admin/audit-logs/', { params }),
 };

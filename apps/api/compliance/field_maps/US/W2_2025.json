@@ -1,0 +1,18 @@
+{
+  "dynamic": true,
+  "auto_resolved": true,
+  "fields": {
+    "employer_name": "topmostSubform[0].Copy1[0].Col_Left[0].f2_02[0]",
+    "employer_ein": "topmostSubform[0].Copy1[0].Col_Left[0].f2_03[0]",
+    "employee_ssn": "topmostSubform[0].Copy1[0].Col_Left[0].f2_04[0]",
+    "employee_first_name": "topmostSubform[0].Copy1[0].Col_Left[0].FirstName_ReadOrder[0].f2_05[0]",
+    "employee_last_name": "topmostSubform[0].Copy1[0].Col_Left[0].LastName_ReadOrder[0].f2_06[0]",
+    "box1_wages": "topmostSubform[0].Copy1[0].Col_Right[0].Box1_ReadOrder[0].f2_09[0]",
+    "box2_federal_tax": "topmostSubform[0].Copy1[0].Col_Right[0].f2_10[0]",
+    "box3_ss_wages": "topmostSubform[0].Copy1[0].Col_Right[0].Box3_ReadOrder[0].f2_11[0]",
+    "box4_ss_tax": "topmostSubform[0].Copy1[0].Col_Right[0].f2_12[0]",
+    "box5_medicare_wages": "topmostSubform[0].Copy1[0].Col_Right[0].Box5_ReadOrder[0].f2_13[0]",
+    "box6_medicare_tax": "topmostSubform[0].Copy1[0].Col_Right[0].f2_14[0]"
+  },
+  "overlay_fallback": true
+}

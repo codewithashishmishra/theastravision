@@ -1,20 +1,44 @@
 from rest_framework import serializers
-from .models import Tenant, User, Role, Permission, UserRoleMapping, EnvConfiguration
+
+from core.jurisdictions import normalize_jurisdiction
+from .models import Tenant, User, Role, Permission, UserRoleMapping, EnvConfiguration, FeatureFlag
+import json
+
 
 class TenantSerializer(serializers.ModelSerializer):
     class Meta:
         model = Tenant
         fields = '__all__'
 
+    def validate_enabled_jurisdictions(self, value):
+        if isinstance(value, str):
+            try:
+                value = json.loads(value)
+            except json.JSONDecodeError:
+                value = [value]
+        if not value:
+            return ['IN']
+        normalized = []
+        for code in value:
+            j = normalize_jurisdiction(str(code))
+            if j and j not in normalized:
+                normalized.append(j)
+        if not normalized:
+            raise serializers.ValidationError('At least one valid jurisdiction (IN, US, CA) is required.')
+        return normalized
+
+
 class UserSerializer(serializers.ModelSerializer):
     class Meta:
         model = User
         fields = ['id', 'username', 'email', 'first_name', 'last_name', 'tenant', 'phone_number', 'is_mfa_enabled', 'is_active']
 
+
 class PermissionSerializer(serializers.ModelSerializer):
     class Meta:
         model = Permission
         fields = '__all__'
+
 
 class RoleSerializer(serializers.ModelSerializer):
     permissions = PermissionSerializer(many=True, read_only=True)
@@ -26,10 +50,12 @@ class RoleSerializer(serializers.ModelSerializer):
         model = Role
         fields = ['id', 'tenant', 'name', 'description', 'permissions', 'permission_ids']
 
+
 class UserRoleMappingSerializer(serializers.ModelSerializer):
     class Meta:
         model = UserRoleMapping
         fields = '__all__'
+
 
 class EnvConfigurationSerializer(serializers.ModelSerializer):
     config = serializers.JSONField(write_only=True)
@@ -62,3 +88,9 @@ class EnvConfigurationSerializer(serializers.ModelSerializer):
             instance.set_config({**existing, **config_data})
         instance.save()
         return instance
+
+
+class FeatureFlagSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = FeatureFlag
+        fields = '__all__'

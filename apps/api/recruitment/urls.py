@@ -1,6 +1,7 @@
 from django.urls import path
 from rest_framework.routers import DefaultRouter
 
+from .career_portal_views import CareerPortalSettingsViewSet
 from .views import (
     AiInterviewReportViewSet,
     AiInterviewSessionViewSet,
@@ -18,6 +19,7 @@ router.register(r'interviews', InterviewViewSet, basename='interviews')
 router.register(r'ai-sessions', AiInterviewSessionViewSet, basename='ai-sessions')
 router.register(r'assessment-templates', AssessmentTemplateViewSet, basename='assessment-templates')
 router.register(r'ai-reports', AiInterviewReportViewSet, basename='ai-reports')
+router.register(r'career-portal/settings', CareerPortalSettingsViewSet, basename='career-portal-settings')
 
 assessment_public = AssessmentPublicViewSet.as_view({
     'get': 'retrieve_assessment',

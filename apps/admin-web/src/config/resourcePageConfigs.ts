@@ -171,15 +171,33 @@ export const resourcePageConfigs: Record<string, ResourcePageConfig> = {
     title: 'Payslips',
     endpoint: '/payroll/payslips/',
     queryKey: 'payroll-payslips',
-    columns: [col('net_pay', 'NET PAY'), col('month', 'MONTH')],
+    columns: [
+      col('net_pay', 'NET PAY'),
+      col('gross_pay', 'GROSS'),
+      col('jurisdiction', 'JURISDICTION'),
+      col('currency', 'CURRENCY'),
+    ],
     readOnly: true,
   },
-  'audit-logins': {
-    title: 'Login Audit',
-    endpoint: '/users/',
-    queryKey: 'audit-logins',
-    columns: [col('email', 'EMAIL'), col('username', 'USERNAME')],
-    readOnly: true,
+  'payroll-declarations': {
+    title: 'Tax Declarations',
+    endpoint: '/payroll/declarations/',
+    queryKey: 'payroll-declarations',
+    columns: [col('jurisdiction', 'JURISDICTION'), col('fiscal_year', 'FY'), col('status', 'STATUS')],
+    formFields: [
+      {
+        key: 'jurisdiction',
+        label: 'Jurisdiction',
+        type: 'select',
+        options: [
+          { value: 'IN', label: 'India' },
+          { value: 'US', label: 'United States' },
+          { value: 'CA', label: 'Canada' },
+        ],
+      },
+      num('fiscal_year', 'Fiscal Year'),
+      area('sections', 'Sections JSON'),
+    ],
   },
   'policies-holidays': {
     title: 'Holiday Calendar',
@@ -187,6 +205,77 @@ export const resourcePageConfigs: Record<string, ResourcePageConfig> = {
     queryKey: 'holidays',
     columns: [col('name', 'NAME'), col('date', 'DATE')],
     formFields: [txt('name', 'Name'), txt('date', 'Date')],
+  },
+  'tenants-provisioning': {
+    title: 'Tenant Provisioning',
+    endpoint: '/tenants/',
+    queryKey: 'tenants-prov',
+    columns: [
+      col('name', 'NAME'),
+      col('domain', 'DOMAIN'),
+      col('email_domain', 'EMAIL DOMAIN'),
+      col('enabled_jurisdictions', 'JURISDICTIONS'),
+      col('default_currency', 'CURRENCY'),
+      col('is_active', 'ACTIVE'),
+    ],
+    formFields: [
+      txt('name', 'Name'),
+      txt('domain', 'Domain'),
+      txt('email_domain', 'Email Domain'),
+      {
+        key: 'enabled_jurisdictions',
+        label: 'Primary Jurisdiction',
+        type: 'select',
+        options: [
+          { value: '["IN"]', label: 'India' },
+          { value: '["US"]', label: 'United States' },
+          { value: '["CA"]', label: 'Canada' },
+          { value: '["IN","US","CA"]', label: 'All Three' },
+        ],
+      },
+    ],
+  },
+  'org-legal-entities': {
+    title: 'Legal Entities',
+    endpoint: '/legal-entities/',
+    queryKey: 'legal-entities',
+    columns: [col('legal_name', 'NAME'), col('jurisdiction', 'JURISDICTION'), col('tax_id', 'TAX ID')],
+    formFields: [
+      {
+        key: 'jurisdiction',
+        label: 'Jurisdiction',
+        type: 'select',
+        options: [
+          { value: 'IN', label: 'India' },
+          { value: 'US', label: 'United States' },
+          { value: 'CA', label: 'Canada' },
+        ],
+      },
+      txt('legal_name', 'Legal Name'),
+      txt('tax_id', 'Tax ID'),
+      txt('registration_number', 'Registration Number', false),
+    ],
+  },
+  'tenants-subscriptions': {
+    title: 'Subscriptions',
+    endpoint: '/tenants/',
+    queryKey: 'tenants-subs',
+    columns: [col('name', 'TENANT'), col('created_at', 'START DATE'), col('is_active', 'STATUS')],
+    readOnly: true,
+  },
+  'platform-flags': {
+    title: 'Feature Flags',
+    endpoint: '/feature-flags/',
+    queryKey: 'feature-flags',
+    columns: [col('name', 'NAME'), col('description', 'DESCRIPTION'), col('is_active', 'ACTIVE')],
+    formFields: [txt('name', 'Flag Name (e.g. ENABLE_X)'), area('description', 'Description'), txt('is_active', 'Is Active (true/false)')],
+  },
+  'ess-profile': {
+    title: 'My Profile',
+    endpoint: '/users/',
+    queryKey: 'users-profile',
+    columns: [col('username', 'USERNAME'), col('email', 'EMAIL'), col('first_name', 'FIRST NAME'), col('last_name', 'LAST NAME')],
+    formFields: [txt('first_name', 'First Name'), txt('last_name', 'Last Name'), txt('phone_number', 'Phone Number')],
   },
 };
 

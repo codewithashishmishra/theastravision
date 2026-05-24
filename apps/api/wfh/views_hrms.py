@@ -416,6 +416,35 @@ class TrackerAuditLogsView(APIView):
     def get(self, request):
         tenant_id = resolve_tenant_id(request.user)
         if not tenant_id:
-            return Response([])
-        logs = TrackerAuditLog.objects.filter(tenant_id=tenant_id).order_by("-created_at")[:200]
-        return Response(TrackerAuditLogSerializer(logs, many=True).data)
+            return Response({"results": [], "pagination": {"page": 1, "page_size": 50, "total": 0, "pages": 1}})
+
+        qs = TrackerAuditLog.objects.filter(tenant_id=tenant_id).select_related("actor").order_by("-created_at")
+        action = request.query_params.get("action")
+        search = request.query_params.get("search")
+        if action:
+            qs = qs.filter(action__icontains=action)
+        if search:
+            from django.db.models import Q
+            qs = qs.filter(Q(action__icontains=search) | Q(entity_type__icontains=search))
+
+        try:
+            page = max(1, int(request.query_params.get("page", 1)))
+        except (TypeError, ValueError):
+            page = 1
+        try:
+            page_size = min(200, max(1, int(request.query_params.get("page_size", 50))))
+        except (TypeError, ValueError):
+            page_size = 50
+
+        total = qs.count()
+        start = (page - 1) * page_size
+        logs = qs[start : start + page_size]
+        return Response({
+            "results": TrackerAuditLogSerializer(logs, many=True).data,
+            "pagination": {
+                "page": page,
+                "page_size": page_size,
+                "total": total,
+                "pages": max(1, (total + page_size - 1) // page_size),
+            },
+        })

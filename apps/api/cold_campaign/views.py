@@ -8,19 +8,30 @@ from rest_framework.views import APIView
 
 from core.permissions import IsSuperAdmin
 
-from .ai_service import generate_campaign_copy
-from .copy_templates import default_campaign_copy
+from .ai_service import generate_campaign_copy, generate_content_variants
+from .copy_templates import default_campaign_copy, html_to_plain
 from .csv_import import parse_recipients_csv
 from .email_service import TRACKING_GIF_BYTES, render_campaign_email, send_campaign_email
-from .models import ColdCampaign, ColdCampaignRecipient
+from .models import (
+    ColdCampaign,
+    ColdCampaignContentBatch,
+    ColdCampaignContentVariant,
+    ColdCampaignRecipient,
+    ColdCampaignThreadMessage,
+)
 from .serializers import (
+    ApplyVariantSerializer,
+    ColdCampaignContentBatchSerializer,
     ColdCampaignDetailSerializer,
     ColdCampaignListSerializer,
+    ColdCampaignThreadMessageSerializer,
     ColdCampaignWriteSerializer,
+    ContentLibraryVariantSerializer,
     GenerateCopySerializer,
+    GenerateVariationsSerializer,
     PreviewSerializer,
 )
-from .tasks import dispatch_campaign_send
+from .tasks import dispatch_campaign_send, resume_campaign_send
 
 
 class ColdCampaignViewSet(viewsets.ModelViewSet):
@@ -37,6 +48,100 @@ class ColdCampaignViewSet(viewsets.ModelViewSet):
 
     def perform_create(self, serializer):
         serializer.save(created_by=self.request.user)
+
+    @action(detail=False, methods=['get'], url_path='content-library')
+    def content_library(self, request):
+        objective = request.query_params.get('objective')
+        qs = ColdCampaignContentVariant.objects.select_related('batch', 'batch__campaign').order_by(
+            '-batch__created_at', 'variant_index'
+        )[:100]
+        if objective:
+            qs = qs.filter(batch__objective=objective)
+        return Response(ContentLibraryVariantSerializer(qs, many=True).data)
+
+    @action(detail=False, methods=['get'], url_path='threads')
+    def threads_list(self, request):
+        qs = (
+            ColdCampaignThreadMessage.objects.filter(
+                direction=ColdCampaignThreadMessage.DIRECTION_INBOUND
+            )
+            .select_related('recipient', 'recipient__campaign')
+            .order_by('-received_at')[:50]
+        )
+        return Response(ColdCampaignThreadMessageSerializer(qs, many=True).data)
+
+    @action(detail=True, methods=['get'], url_path='threads')
+    def campaign_threads(self, request, pk=None):
+        campaign = self.get_object()
+        qs = ColdCampaignThreadMessage.objects.filter(
+            recipient__campaign=campaign
+        ).select_related('recipient', 'recipient__campaign').order_by('-received_at')
+        return Response(ColdCampaignThreadMessageSerializer(qs, many=True).data)
+
+    @action(detail=True, methods=['post'], url_path='generate-variations')
+    def generate_variations(self, request, pk=None):
+        campaign = self.get_object()
+        if campaign.status != ColdCampaign.STATUS_DRAFT:
+            return Response(
+                {'detail': 'Can only generate content for draft campaigns.'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        ser = GenerateVariationsSerializer(data=request.data)
+        ser.is_valid(raise_exception=True)
+        objective = ser.validated_data['objective']
+        try:
+            variants_data, model_name = generate_content_variants(campaign, objective=objective)
+        except ValueError as exc:
+            return Response({'detail': str(exc)}, status=status.HTTP_400_BAD_REQUEST)
+        except Exception as exc:
+            return Response({'detail': f'AI generation failed: {exc}'}, status=500)
+
+        batch = ColdCampaignContentBatch.objects.create(
+            campaign=campaign,
+            objective=objective,
+            model=model_name,
+            created_by=request.user,
+        )
+        for v in variants_data:
+            ColdCampaignContentVariant.objects.create(batch=batch, **v)
+
+        campaign.generation_objective = objective
+        campaign.save(update_fields=['generation_objective', 'updated_at'])
+        return Response(ColdCampaignContentBatchSerializer(batch).data)
+
+    @action(detail=True, methods=['post'], url_path='apply-variant')
+    def apply_variant(self, request, pk=None):
+        campaign = self.get_object()
+        if campaign.status != ColdCampaign.STATUS_DRAFT:
+            return Response(
+                {'detail': 'Can only apply content to draft campaigns.'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        ser = ApplyVariantSerializer(data=request.data)
+        ser.is_valid(raise_exception=True)
+        try:
+            variant = ColdCampaignContentVariant.objects.select_related('batch').get(
+                pk=ser.validated_data['variant_id']
+            )
+        except ColdCampaignContentVariant.DoesNotExist:
+            return Response({'detail': 'Variant not found.'}, status=404)
+
+        campaign.subject = variant.subject
+        campaign.body_html = variant.body_html
+        campaign.body_text = variant.body_text or html_to_plain(variant.body_html)
+        campaign.selected_content = variant
+        campaign.generation_objective = variant.batch.objective
+        campaign.save(
+            update_fields=[
+                'subject',
+                'body_html',
+                'body_text',
+                'selected_content',
+                'generation_objective',
+                'updated_at',
+            ]
+        )
+        return Response(ColdCampaignDetailSerializer(campaign).data)
 
     @action(detail=True, methods=['post'], url_path='load-default-template')
     def load_default_template(self, request, pk=None):
@@ -108,6 +213,7 @@ class ColdCampaignViewSet(viewsets.ModelViewSet):
         campaign = self.get_object()
         ser = PreviewSerializer(data=request.data)
         ser.is_valid(raise_exception=True)
+
         class _Recipient:
             first_name = ser.validated_data.get('first_name', '')
             company = ser.validated_data.get('company', '')
@@ -139,14 +245,15 @@ class ColdCampaignViewSet(viewsets.ModelViewSet):
     @action(detail=True, methods=['post'])
     def send(self, request, pk=None):
         campaign = self.get_object()
-        if campaign.status == ColdCampaign.STATUS_SENDING:
+        if campaign.status == ColdCampaign.STATUS_SENDING and not campaign.is_paused:
             return Response({'detail': 'Campaign is already sending.'}, status=400)
         if campaign.recipients.filter(status=ColdCampaignRecipient.STATUS_PENDING).count() == 0:
             return Response({'detail': 'No pending recipients.'}, status=400)
         if not campaign.subject or not campaign.body_html:
             return Response({'detail': 'Subject and body are required.'}, status=400)
         campaign.status = ColdCampaign.STATUS_SENDING
-        campaign.save(update_fields=['status', 'updated_at'])
+        campaign.is_paused = False
+        campaign.save(update_fields=['status', 'is_paused', 'updated_at'])
         dispatch_campaign_send.delay(str(campaign.id))
         return Response(
             {
@@ -157,6 +264,25 @@ class ColdCampaignViewSet(viewsets.ModelViewSet):
                 ).count(),
             }
         )
+
+    @action(detail=True, methods=['post'])
+    def pause(self, request, pk=None):
+        campaign = self.get_object()
+        if campaign.status != ColdCampaign.STATUS_SENDING:
+            return Response({'detail': 'Only sending campaigns can be paused.'}, status=400)
+        campaign.is_paused = True
+        campaign.save(update_fields=['is_paused', 'updated_at'])
+        return Response({'detail': 'Campaign paused.', 'is_paused': True})
+
+    @action(detail=True, methods=['post'])
+    def resume(self, request, pk=None):
+        campaign = self.get_object()
+        if campaign.status != ColdCampaign.STATUS_SENDING:
+            return Response({'detail': 'Only sending campaigns can be resumed.'}, status=400)
+        campaign.is_paused = False
+        campaign.save(update_fields=['is_paused', 'updated_at'])
+        resume_campaign_send.delay(str(campaign.id))
+        return Response({'detail': 'Campaign resumed.', 'is_paused': False})
 
     @action(detail=True, methods=['get'])
     def stats(self, request, pk=None):
@@ -184,6 +310,7 @@ class ColdCampaignViewSet(viewsets.ModelViewSet):
                         'opened_at': r.opened_at,
                         'open_count': r.open_count,
                         'error_message': r.error_message,
+                        'reply_status': r.reply_status,
                     }
                     for r in recipients
                 ],

@@ -6,7 +6,7 @@ from django.core.management.base import BaseCommand
 from django.db import transaction
 from faker import Faker
 
-from core.models import Role, Tenant, User, UserRoleMapping
+from core.models import Role, Tenant, TenantAddon, User, UserRoleMapping
 from employees.models import Employee, EmployeeBank, EmployeeContact
 from organization.models import Branch, CompanyProfile, Department, Designation
 
@@ -51,6 +51,7 @@ class Command(BaseCommand):
         self._ensure_company_profile(primary)
         self._ensure_super_admin(primary.email_domain, default_password)
         self._ensure_tenant_role_users(primary, TENANT_ROLES, default_password)
+        self._seed_job_portal(primary)
 
         for sample in SAMPLE_TENANTS:
             tenant = self._ensure_tenant(**sample)
@@ -141,6 +142,56 @@ class Command(BaseCommand):
             )
         )
 
+    def _seed_job_portal(self, tenant):
+        from django.utils import timezone
+
+        from recruitment.job_board_auth import generate_api_key
+        from recruitment.models import JobRequisition, TenantCareerPortalSettings
+
+        addon, _ = TenantAddon.objects.get_or_create(
+            tenant=tenant,
+            addon_code=TenantAddon.ADDON_JOB_PORTAL,
+            defaults={'enabled': True, 'notes': 'Demo Job Portal add-on'},
+        )
+        if not addon.enabled:
+            addon.enabled = True
+            addon.save(update_fields=['enabled', 'updated_at'])
+
+        if not TenantCareerPortalSettings.objects.filter(tenant=tenant).exists():
+            full_key, prefix, key_hash = generate_api_key()
+            TenantCareerPortalSettings.objects.create(
+                tenant=tenant,
+                slug=tenant.domain or 'aastraa-demo',
+                api_key_hash=key_hash,
+                api_key_prefix=prefix,
+                company_blurb='Join Aastraa Demo — build the future of HR tech.',
+                allowed_embed_origins=['http://localhost:3001', 'http://127.0.0.1:3001'],
+            )
+            self.stdout.write(
+                self.style.WARNING(
+                    f'Job Portal API key (save for testing): {full_key}'
+                )
+            )
+
+        dept = Department.objects.filter(tenant=tenant).first()
+        if not JobRequisition.objects.filter(tenant=tenant, slug='senior-software-engineer').exists():
+            JobRequisition.objects.create(
+                tenant=tenant,
+                title='Senior Software Engineer',
+                department=dept,
+                location='Bengaluru, India',
+                description=(
+                    'We are looking for a Senior Software Engineer to build our HRMS platform. '
+                    'You will work with Django, React, and AI services.'
+                ),
+                status='Open',
+                slug='senior-software-engineer',
+                is_published=True,
+                published_at=timezone.now(),
+                employment_type='Full-time',
+                work_mode='Hybrid',
+            )
+
     def _ensure_tenant(self, name, domain, email_domain):
         tenant, created = Tenant.objects.get_or_create(
             domain=domain,
@@ -225,25 +276,27 @@ class Command(BaseCommand):
             UserRoleMapping.objects.get_or_create(user=user, role=role)
 
     def _seed_org_structure(self, tenant):
-        for _ in range(2):
-            Branch.objects.create(
+        for suffix in ('01', '02'):
+            Branch.objects.get_or_create(
                 tenant=tenant,
-                name=fake.city() + ' Branch',
-                code=fake.bothify(text='BR-###').upper(),
-                address=fake.address(),
-                city=fake.city(),
-                state=fake.state(),
-                country=fake.country(),
+                code=f'BR-{suffix}',
+                defaults={
+                    'name': fake.city() + ' Branch',
+                    'address': fake.address(),
+                    'city': fake.city(),
+                    'state': fake.state(),
+                    'country': fake.country(),
+                },
             )
         for dept_name in ['HR', 'Engineering', 'Sales', 'Marketing']:
-            Department.objects.create(
+            Department.objects.get_or_create(
                 tenant=tenant,
-                name=dept_name,
                 code=dept_name[:3].upper(),
+                defaults={'name': dept_name},
             )
         for desig in ['Manager', 'Developer', 'Executive', 'Analyst']:
-            Designation.objects.create(
+            Designation.objects.get_or_create(
                 tenant=tenant,
-                name=desig,
                 code=desig[:3].upper(),
+                defaults={'name': desig},
             )

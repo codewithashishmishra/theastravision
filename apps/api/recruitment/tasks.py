@@ -20,6 +20,15 @@ def generate_and_email_report(session_id: str):
 
 
 @shared_task
+def run_candidate_match_task(candidate_id: str):
+    from recruitment.models import Candidate
+    from recruitment.services import run_candidate_match
+
+    candidate = Candidate.objects.select_related('job').get(pk=candidate_id)
+    run_candidate_match(candidate)
+
+
+@shared_task
 def cleanup_expired_sessions():
     from django.utils import timezone
     from recruitment.models import AiInterviewSession

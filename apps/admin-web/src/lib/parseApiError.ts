@@ -10,6 +10,14 @@ export function parseApiError(err: unknown, fallback = 'Request failed'): string
       if (Array.isArray(d.detail)) return d.detail.map(String).join(', ');
       if (typeof d.error === 'string') return d.error;
       if (typeof d.message === 'string') return d.message;
+      const fieldMessages = Object.entries(d)
+        .filter(([key]) => key !== 'detail')
+        .flatMap(([key, val]) => {
+          if (Array.isArray(val)) return val.map((v) => `${key}: ${String(v)}`);
+          if (typeof val === 'string') return [`${key}: ${val}`];
+          return [];
+        });
+      if (fieldMessages.length > 0) return fieldMessages.join(' ');
     }
     if (err.response?.status) return `${fallback} (HTTP ${err.response.status})`;
   }

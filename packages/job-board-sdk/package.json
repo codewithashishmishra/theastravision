@@ -1,0 +1,14 @@
+{
+  "name": "@aastraa/job-board-sdk",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "vite build",
+    "dev": "vite build --watch"
+  },
+  "devDependencies": {
+    "typescript": "^5",
+    "vite": "^6.2.0"
+  }
+}

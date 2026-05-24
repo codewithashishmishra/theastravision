@@ -10,14 +10,17 @@ import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import { Dropdown, DropdownTrigger, DropdownMenu, DropdownItem } from '@nextui-org/react';
 import { menuConfig, Role, MenuSection } from '@/config/menuConfig';
+import { getStoredJurisdictions, menuVisibleForJurisdictions } from '@/lib/jurisdiction';
 import { useQueryClient } from '@tanstack/react-query';
-import { LogOut, User as UserIcon, Settings } from 'lucide-react';
+import { LogOut, Settings } from 'lucide-react';
 import { clearAuthSession } from '@/lib/authSession';
 import { useAuth } from '@/lib/AuthProvider';
 import { getRoleHomeRoute, isDashboardPath } from '@/lib/roleRouting';
 import { findMenuItemByPath, isPathAllowedForRoles } from '@/lib/menuAccess';
 import { useCooldown } from '@/components/platform/CooldownProvider';
 import AppFooter from '@/components/layouts/AppFooter';
+import { ModuleContextFooter } from '@/components/layouts/ModuleContextFooter';
+import { SidebarProfileNav } from '@/components/layouts/SidebarProfileNav';
 
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
   const [sidebarOpen, setSidebarOpen] = useState(false);
@@ -74,21 +77,27 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   const toggleSidebar = () => setSidebarOpen(!sidebarOpen);
 
   const getFilteredMenu = (): MenuSection[] => {
+    const tenantJurisdictions = getStoredJurisdictions();
+    const filterItem = (item: { allowedRoles: Role[]; jurisdictions?: import('@/lib/jurisdiction').Jurisdiction[]; children?: typeof item[] }) => {
+      if (!item.allowedRoles.some((role) => activeRoles.has(role))) return false;
+      if (!menuVisibleForJurisdictions(item.jurisdictions, tenantJurisdictions)) return false;
+      return true;
+    };
+
     return menuConfig
       .map((section) => {
         const filteredItems = section.items
-          .filter((item) => item.allowedRoles.some((role) => activeRoles.has(role)))
+          .filter((item) => filterItem(item))
           .map((item) => {
             if (item.children) {
               return {
                 ...item,
-                children: item.children.filter((child) =>
-                  child.allowedRoles.some((role) => activeRoles.has(role))
-                ),
+                children: item.children.filter((child) => filterItem(child)),
               };
             }
             return item;
-          });
+          })
+          .filter((item) => !item.children || item.children.length > 0);
         return { ...section, items: filteredItems };
       })
       .filter((section) => section.items.length > 0);
@@ -121,7 +130,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
               isIconOnly
               variant="light"
               className="md:hidden absolute right-4 text-default-500"
-              onClick={toggleSidebar}
+              onPress={toggleSidebar}
             >
               <X size={20} />
             </Button>
@@ -198,8 +207,10 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
           </div>
         </div>
 
-        <div className="shrink-0 p-6">
-          <div className="h-px w-full bg-divider/50 mb-6" />
+        <div className="shrink-0 px-3 pb-3 pt-2">
+          {!authLoading && <SidebarProfileNav />}
+          <div className="h-px w-full bg-divider/50 mx-3 my-4" />
+          <div className="px-3 pb-3">
           {authLoading ? (
             <div className="flex items-center gap-4">
               <Skeleton className="rounded-full w-10 h-10" />
@@ -226,25 +237,23 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
                 </div>
               </DropdownTrigger>
               <DropdownMenu aria-label="User Actions" variant="flat">
-                <DropdownItem key="profile" startContent={<UserIcon size={16} />}>
-                  My Profile
-                </DropdownItem>
-                <DropdownItem key="settings" startContent={<Settings size={16} />}>
+                <DropdownItem key="settings" startContent={<Settings size={16} />} onPress={() => router.push('/settings/global')}>
                   Account Settings
                 </DropdownItem>
-                <DropdownItem key="logout" color="danger" startContent={<LogOut size={16} />} onClick={handleLogout}>
+                <DropdownItem key="logout" color="danger" startContent={<LogOut size={16} />} onPress={handleLogout}>
                   Log Out
                 </DropdownItem>
               </DropdownMenu>
             </Dropdown>
           )}
+          </div>
         </div>
       </aside>
 
       <div className="flex-1 flex flex-col h-full relative w-full bg-background">
         <header className="shrink-0 h-20 bg-transparent flex items-center justify-between px-8 z-10 w-full max-w-7xl mx-auto">
           <div className="flex items-center gap-4 flex-1">
-            <Button isIconOnly variant="light" className="md:hidden text-foreground" onClick={toggleSidebar}>
+            <Button isIconOnly variant="light" className="md:hidden text-foreground" onPress={toggleSidebar}>
               <Menu size={20} />
             </Button>
             <GlobalSearch activeRoles={activeRoles} />
@@ -267,7 +276,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
               variant="light"
               radius="full"
               className="text-default-500 hover:text-foreground"
-              onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')}
+              onPress={() => setTheme(theme === 'dark' ? 'light' : 'dark')}
             >
               {mounted ? (
                 theme === 'dark' ? (
@@ -349,6 +358,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
             ) : (
               children
             )}
+            <ModuleContextFooter />
             <AppFooter className="mt-auto" />
           </div>
         </main>

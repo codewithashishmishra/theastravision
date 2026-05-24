@@ -1,41 +1,48 @@
 'use client';
 
-import { useEffect, useState } from 'react';
-import { Card, CardBody, Table, TableBody, TableCell, TableColumn, TableHeader, TableRow } from '@nextui-org/react';
+import { useCallback, useEffect, useState } from 'react';
+import { AuditLogTable } from '@/components/audit/AuditLogTable';
 import { wfhApi } from '@/lib/wfhApi';
+import type { AuditFilters } from '@/lib/auditApi';
+
+const columns = [
+  { key: 'created_at', label: 'Time', render: (row: Record<string, unknown>) => new Date(String(row.created_at)).toLocaleString() },
+  { key: 'action', label: 'Action' },
+  { key: 'entity_type', label: 'Entity' },
+  { key: 'ip_address', label: 'IP' },
+];
 
 export default function TrackerAuditLogsPage() {
-  const [logs, setLogs] = useState<{ action: string; entity_type: string; created_at: string; ip_address: string }[]>([]);
+  const [filters, setFilters] = useState<AuditFilters>({ page: 1, page_size: 50 });
+  const [rows, setRows] = useState<Record<string, unknown>[]>([]);
+  const [pagination, setPagination] = useState({ page: 1, page_size: 50, total: 0, pages: 1 });
+  const [loading, setLoading] = useState(true);
 
-  useEffect(() => {
-    wfhApi.auditLogs().then((r) => setLogs(r.data));
-  }, []);
+  const load = useCallback(() => {
+    setLoading(true);
+    wfhApi.auditLogs(filters)
+      .then((r) => {
+        setRows(r.data.results || r.data);
+        if (r.data.pagination) setPagination(r.data.pagination);
+      })
+      .finally(() => setLoading(false));
+  }, [filters]);
+
+  useEffect(() => { load(); }, [load]);
 
   return (
-    <div className="max-w-7xl mx-auto p-6 flex flex-col gap-6">
-      <h1 className="text-3xl font-extrabold">Tracker Audit Logs</h1>
-      <Card>
-        <CardBody>
-          <Table>
-            <TableHeader>
-              <TableColumn>Time</TableColumn>
-              <TableColumn>Action</TableColumn>
-              <TableColumn>Entity</TableColumn>
-              <TableColumn>IP</TableColumn>
-            </TableHeader>
-            <TableBody>
-              {logs.map((l) => (
-                <TableRow key={`${l.created_at}-${l.action}`}>
-                  <TableCell>{new Date(l.created_at).toLocaleString()}</TableCell>
-                  <TableCell>{l.action}</TableCell>
-                  <TableCell>{l.entity_type}</TableCell>
-                  <TableCell>{l.ip_address}</TableCell>
-                </TableRow>
-              ))}
-            </TableBody>
-          </Table>
-        </CardBody>
-      </Card>
-    </div>
+    <AuditLogTable
+      title="Tracker Audit Logs"
+      description="WFH desktop tracker actions for your tenant."
+      columns={columns}
+      rows={rows}
+      pagination={pagination}
+      loading={loading}
+      filters={filters}
+      onFiltersChange={setFilters}
+      onRefresh={load}
+      exportFilename="tracker-audit-logs"
+      showModuleFilter={false}
+    />
   );
 }

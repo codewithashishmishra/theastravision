@@ -1,0 +1,56 @@
+[
+  {
+    "jurisdiction": "IN",
+    "doc_type": "FORM16",
+    "tax_year": 2025,
+    "source_url": "https://web.archive.org/web/20150121235312if_/http://www.incometaxindia.gov.in:80/Forms/Income-Tax%20Rules/103120000000007845.pdf",
+    "template_path": "templates/forms/IN/FORM16_2025.pdf",
+    "field_map_path": "field_maps/IN/FORM16_2025.json",
+    "fill_strategy": "html_fallback"
+  },
+  {
+    "jurisdiction": "IN",
+    "doc_type": "FORM12BA",
+    "tax_year": 2025,
+    "source_url": "https://web.archive.org/web/20170110155644if_/http://www.incometaxindia.gov.in:80/Forms/Income-Tax%20Rules/103120000000007841.pdf",
+    "template_path": "templates/forms/IN/FORM12BA_2025.pdf",
+    "field_map_path": "field_maps/IN/FORM12BA_2025.json",
+    "fill_strategy": "html_fallback"
+  },
+  {
+    "jurisdiction": "US",
+    "doc_type": "W2",
+    "tax_year": 2025,
+    "source_url": "https://www.irs.gov/pub/irs-pdf/fw2.pdf",
+    "template_path": "templates/forms/US/W2_2025.pdf",
+    "field_map_path": "field_maps/US/W2_2025.json",
+    "fill_strategy": "dynamic_acroform"
+  },
+  {
+    "jurisdiction": "US",
+    "doc_type": "FORM1095C",
+    "tax_year": 2025,
+    "source_url": "https://www.irs.gov/pub/irs-pdf/f1095c.pdf",
+    "template_path": "templates/forms/US/FORM1095C_2025.pdf",
+    "field_map_path": "field_maps/US/FORM1095C_2025.json",
+    "fill_strategy": "dynamic_acroform"
+  },
+  {
+    "jurisdiction": "CA",
+    "doc_type": "T4",
+    "tax_year": 2025,
+    "source_url": "https://web.archive.org/web/20240415181656if_/https://www.canada.ca/content/dam/cra-arc/formspubs/pbg/t4/t4-23b.pdf",
+    "template_path": "templates/forms/CA/T4_2025.pdf",
+    "field_map_path": "field_maps/CA/T4_2025.json",
+    "fill_strategy": "html_fallback"
+  },
+  {
+    "jurisdiction": "CA",
+    "doc_type": "RL1",
+    "tax_year": 2025,
+    "source_url": "https://web.archive.org/web/20181212144556if_/https://www.revenuquebec.ca/documents/en/formulaires/rl/rl-1-t%282016-10%29.pdf",
+    "template_path": "templates/forms/CA/RL1_2025.pdf",
+    "field_map_path": "field_maps/CA/RL1_2025.json",
+    "fill_strategy": "html_fallback"
+  }
+]

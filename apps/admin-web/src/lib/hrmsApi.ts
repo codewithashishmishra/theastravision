@@ -28,6 +28,12 @@ export const employeesApi = {
     create: (data: Record<string, unknown>) => api.post('/employees/taxes/', data),
     update: (id: string, data: Record<string, unknown>) => api.put(`/employees/taxes/${id}/`, data),
   },
+  me: {
+    get: () => api.get('/employees/me/'),
+    update: (data: Record<string, unknown>) => api.patch('/employees/me/', data),
+    bank: () => api.get('/employees/me/bank/'),
+    assets: () => api.get('/employees/me/assets/'),
+  },
 };
 
 export const organizationApi = {
@@ -125,17 +131,76 @@ export const payrollApi = {
   },
   runs: {
     list: () => api.get('/payroll/runs/'),
-    generate: (data: Record<string, unknown>) => api.post('/payroll/runs/generate/', data),
+    create: (data: Record<string, unknown>) => api.post('/payroll/runs/', data),
+    generate: (id: string) => api.post(`/payroll/runs/${id}/generate/`),
+    approve: (id: string) => api.post(`/payroll/runs/${id}/approve/`),
+    lock: (id: string) => api.post(`/payroll/runs/${id}/lock/`),
+    release: (id: string) => api.post(`/payroll/runs/${id}/release/`),
+    bankExport: (id: string) => api.get(`/payroll/runs/${id}/bank_export/`, { responseType: 'blob' }),
   },
-  payslips: { list: () => api.get('/payroll/payslips/') },
+  payslips: {
+    list: () => api.get('/payroll/payslips/'),
+    pdf: (id: string) => api.get(`/payroll/payslips/${id}/pdf/`, { responseType: 'blob' }),
+  },
+  declarations: {
+    list: (params?: Record<string, string>) => api.get('/payroll/declarations/', { params }),
+    create: (data: Record<string, unknown>) => api.post('/payroll/declarations/', data),
+    update: (id: string, data: Record<string, unknown>) => api.put(`/payroll/declarations/${id}/`, data),
+  },
+  taxTips: {
+    credits: () => api.get('/payroll/tax-tips/credits/'),
+    generate: (data: { jurisdiction: string; fiscal_year: number }) =>
+      api.post('/payroll/tax-tips/generate/', data),
+  },
+  structures: {
+    list: () => api.get('/payroll/structures/'),
+    update: (id: string, data: Record<string, unknown>) => api.patch(`/payroll/structures/${id}/`, data),
+  },
+  settings: {
+    get: () => api.get('/payroll/settings/'),
+    patch: (data: Record<string, unknown>) => api.patch('/payroll/settings/', data),
+  },
+};
+
+export const complianceApi = {
+  documents: { list: () => api.get('/compliance/documents/') },
+  form16: (fy: number) => api.post('/compliance/actions/form16/generate/', { fy }),
+  form12ba: (fy: number) => api.post('/compliance/actions/form12ba/generate/', { fy }),
+  w2: (taxYear: number) => api.post('/compliance/actions/w2/generate/', { tax_year: taxYear }),
+  form1095c: (taxYear: number) => api.post('/compliance/actions/1095c/generate/', { tax_year: taxYear }),
+  t4: (taxYear: number) => api.post('/compliance/actions/t4/generate/', { tax_year: taxYear }),
+  rl1: (taxYear: number) => api.post('/compliance/actions/rl1/generate/', { tax_year: taxYear }),
+  bulkYearEnd: (fy: number) => api.post('/compliance/actions/bulk-year-end/', { fy }),
+  itrAssist: (fy: number, employeeId: string) => api.post('/compliance/actions/itr-assist/', { fy, employee_id: employeeId }),
+};
+
+export const legalEntitiesApi = {
+  list: () => api.get('/legal-entities/'),
+  create: (data: Record<string, unknown>) => api.post('/legal-entities/', data),
+  update: (id: string, data: Record<string, unknown>) => api.put(`/legal-entities/${id}/`, data),
+};
+
+export const platformAddonsApi = {
+  list: (params?: Record<string, string>) => api.get('/platform/tenant-addons/', { params }),
+  upsert: (data: { tenant: string; addon_code: string; enabled: boolean; notes?: string }) =>
+    api.post('/platform/tenant-addons/upsert/', data),
 };
 
 export const recruitmentApi = {
   jobs: {
-    list: () => api.get('/recruitment/jobs/'),
+    list: (params?: Record<string, string>) => api.get('/recruitment/jobs/', { params }),
     create: (data: Record<string, unknown>) => api.post('/recruitment/jobs/', data),
     update: (id: string, data: Record<string, unknown>) => api.put(`/recruitment/jobs/${id}/`, data),
     get: (id: string) => api.get(`/recruitment/jobs/${id}/`),
+    publish: (id: string) => api.post(`/recruitment/jobs/${id}/publish/`),
+    unpublish: (id: string) => api.post(`/recruitment/jobs/${id}/unpublish/`),
+  },
+  careerPortal: {
+    settings: () => api.get('/recruitment/career-portal/settings/'),
+    updateSettings: (data: Record<string, unknown>) =>
+      api.patch('/recruitment/career-portal/settings/update_settings/', data),
+    regenerateKey: () => api.post('/recruitment/career-portal/settings/regenerate-key/'),
+    embedSnippet: () => api.get('/recruitment/career-portal/settings/embed-snippet/'),
   },
   candidates: {
     list: () => api.get('/recruitment/candidates/'),

@@ -14,6 +14,7 @@ except ImportError:
 
 from .utils import get_client_ip, get_geo_location
 from .auth_views import _set_refresh_cookie
+from .audit import system_audit_log
 
 class TOTPSetupView(APIView):
     permission_classes = [IsAuthenticated]
@@ -49,6 +50,7 @@ class TOTPVerifySetupView(APIView):
             if totp.verify(code):
                 device.is_verified = True
                 device.save()
+                system_audit_log(request, action="auth.mfa.setup", module="auth", metadata={"method": "totp"})
                 return Response({"message": "TOTP Setup complete"})
             else:
                 return Response({"error": "Invalid code"}, status=400)
@@ -91,6 +93,13 @@ class TOTPVerifyLoginView(APIView):
                     location_country=country,
                     login_method='totp'
                 )
+                system_audit_log(
+                    request,
+                    action="auth.login.success",
+                    module="auth",
+                    user=user,
+                    metadata={"method": "totp"},
+                )
                 
                 response = Response({
                     "access_token": str(refresh.access_token),
@@ -99,6 +108,13 @@ class TOTPVerifyLoginView(APIView):
                 _set_refresh_cookie(response, str(refresh), request)
                 return response
             else:
+                system_audit_log(
+                    request,
+                    action="auth.login.failed",
+                    module="auth",
+                    user=user,
+                    metadata={"method": "totp", "reason": "invalid_code"},
+                )
                 return Response({"error": "Invalid code"}, status=400)
                 
         except Exception as e:
@@ -176,6 +192,13 @@ class FaceLoginView(APIView):
                     location_country=country,
                     login_method='face_scan'
                 )
+                system_audit_log(
+                    request,
+                    action="auth.login.success",
+                    module="auth",
+                    user=user,
+                    metadata={"method": "face_scan", "match_percentage": match_percentage},
+                )
                 
                 response = Response({
                     "access_token": str(refresh.access_token),
@@ -186,6 +209,13 @@ class FaceLoginView(APIView):
             else:
                 user.failed_login_attempts += 1
                 user.save()
+                system_audit_log(
+                    request,
+                    action="auth.login.failed",
+                    module="auth",
+                    user=user,
+                    metadata={"method": "face_scan", "match_percentage": match_percentage},
+                )
                 return Response({"error": "Face does not match. Authentication failed."}, status=401)
                 
         except Exception as e:

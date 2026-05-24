@@ -30,8 +30,20 @@ app.conf.beat_schedule = {
         "task": "core.tasks.sample_platform_utilization",
         "schedule": 30.0,
     },
+    "flush-clickhouse-log-buffer": {
+        "task": "core.tasks.flush_clickhouse_log_buffer",
+        "schedule": 30.0,
+    },
     "cleanup-expired-ai-interviews": {
         "task": "recruitment.tasks.cleanup_expired_sessions",
         "schedule": crontab(minute="*/15"),
+    },
+    "process-cold-campaign-followups": {
+        "task": "cold_campaign.tasks.process_cold_campaign_followups",
+        "schedule": crontab(minute="*/15"),
+    },
+    "poll-cold-campaign-replies": {
+        "task": "cold_campaign.tasks.poll_cold_campaign_replies",
+        "schedule": crontab(minute="*/5"),
     },
 }

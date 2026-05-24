@@ -26,6 +26,8 @@ This document outlines the local development setup for the AastraaHR project on 
 
 - `apps/api/` - Django API backend
 - `apps/admin-web/` - Next.js frontend for HR/Admins/Employees
+- `apps/careers-web/` - Public hosted careers pages (Job Portal add-on)
+- `packages/job-board-sdk/` - Embeddable job board script (`npm run build` → `dist/embed.js`)
 - `apps/ai-service/` - FastAPI AI/ATS backend
 - `infra/docker/` - Docker compose configuration
 - `docs/` - Architecture and per-module specifications
@@ -69,8 +71,25 @@ npm run dev
 
 Create an `.env.local` file in `apps/admin-web/`:
 ```env
-NEXT_PUBLIC_API_URL=http://localhost:8000
+NEXT_PUBLIC_API_URL=http://localhost:8000/api/v1
 ```
+
+### 3b. Careers Web (Job Portal hosted pages)
+
+```bash
+cd apps/careers-web
+npm install
+npm run dev
+```
+
+`.env.local`:
+```env
+NEXT_PUBLIC_API_URL=http://127.0.0.1:8000/api/v1
+```
+
+Enable the add-on for a tenant via **Super Admin → Tenants → Add-ons**, then open `http://localhost:3001/{tenant-slug}` (demo: `/aastraa-demo` after `seed_dev`).
+
+See [docs/modules/08-recruitment-job-portal.md](modules/08-recruitment-job-portal.md).
 
 ### 4. AI Service (FastAPI)
 

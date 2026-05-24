@@ -11,13 +11,39 @@ from .models import (
     Interview,
     JobRequisition,
     ProctorSnapshot,
+    TenantCareerPortalSettings,
 )
+from .job_board_utils import sanitize_job_html
 
 
 class JobRequisitionSerializer(serializers.ModelSerializer):
+    department_name = serializers.CharField(source='department.name', read_only=True)
+
     class Meta:
         model = JobRequisition
         fields = '__all__'
+        read_only_fields = ('published_at',)
+
+    def validate_rich_description_html(self, value):
+        return sanitize_job_html(value or '')
+
+
+class CareerPortalSettingsSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = TenantCareerPortalSettings
+        fields = [
+            'id',
+            'slug',
+            'api_key_prefix',
+            'allowed_embed_origins',
+            'logo_url',
+            'primary_color',
+            'company_blurb',
+            'custom_domain',
+            'created_at',
+            'updated_at',
+        ]
+        read_only_fields = ('api_key_prefix', 'created_at', 'updated_at')
 
 
 class CandidateSerializer(serializers.ModelSerializer):

@@ -22,6 +22,7 @@ type FormModalProps = {
   onChange: (key: string, value: string) => void;
   onSubmit: () => void;
   isLoading?: boolean;
+  isDisabled?: boolean;
   submitLabel?: string;
 };
 
@@ -34,6 +35,7 @@ export function FormModal({
   onChange,
   onSubmit,
   isLoading,
+  isDisabled,
   submitLabel = 'Save',
 }: FormModalProps) {
   return (
@@ -86,7 +88,14 @@ export function FormModal({
             </ModalBody>
             <ModalFooter>
               <Button variant="light" onPress={onClose}>Cancel</Button>
-              <Button color="primary" isLoading={isLoading} onPress={onSubmit}>{submitLabel}</Button>
+              <Button
+                color="primary"
+                isLoading={isLoading}
+                isDisabled={isDisabled || isLoading}
+                onPress={onSubmit}
+              >
+                {submitLabel}
+              </Button>
             </ModalFooter>
           </>
         )}

@@ -10,6 +10,7 @@ from rest_framework.throttling import AnonRateThrottle
 from .models import User, AuthSession, UserRoleMapping
 import uuid
 from .utils import get_client_ip, get_geo_location
+from .audit import system_audit_log
 
 
 def _get_refresh_token_from_request(request):
@@ -52,6 +53,8 @@ def serialize_auth_me(user):
             'id': str(tenant.id),
             'name': tenant.name,
             'email_domain': tenant.email_domain or '',
+            'enabled_jurisdictions': tenant.enabled_jurisdictions or ['IN'],
+            'default_currency': tenant.default_currency or 'INR',
         }
     display_name = (user.get_full_name() or '').strip() or user.email
     return {
@@ -85,9 +88,22 @@ class LoginPasswordView(APIView):
         user = User.objects.filter(email=email).first()
         if not user:
             # Prevent email enumeration
+            system_audit_log(
+                request,
+                action="auth.login.failed",
+                module="auth",
+                metadata={"email": email, "reason": "unknown_user"},
+            )
             return Response({"error": "Invalid credentials"}, status=401)
             
         if user.locked_until and user.locked_until > timezone.now():
+            system_audit_log(
+                request,
+                action="auth.login.blocked",
+                module="auth",
+                user=user,
+                metadata={"reason": "account_locked"},
+            )
             return Response({"error": "Account temporarily locked. Try again later."}, status=423)
 
         # In Django, authenticate usually expects 'username' instead of 'email' unless configured otherwise
@@ -98,6 +114,13 @@ class LoginPasswordView(APIView):
             if user.failed_login_attempts >= 5:
                 user.locked_until = timezone.now() + timedelta(minutes=15)
             user.save()
+            system_audit_log(
+                request,
+                action="auth.login.failed",
+                module="auth",
+                user=user,
+                metadata={"email": email, "attempts": user.failed_login_attempts},
+            )
             return Response({"error": "Invalid credentials"}, status=401)
             
         # Reset attempts on success
@@ -126,6 +149,14 @@ class LoginPasswordView(APIView):
             location_country=country,
             login_method='password',
             client_type='web',
+        )
+
+        system_audit_log(
+            request,
+            action="auth.login.success",
+            module="auth",
+            user=user,
+            metadata={"method": "password", "client_type": "web"},
         )
         
         response = Response({
@@ -180,6 +211,12 @@ class LogoutView(APIView):
                 if session:
                     session.is_revoked = True
                     session.save()
+                    system_audit_log(
+                        request,
+                        action="auth.logout",
+                        module="auth",
+                        user=session.user,
+                    )
             except Exception:
                 pass
                 
