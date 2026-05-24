@@ -16,3 +16,8 @@ finish_sync.ps1
 
 # Next.js build output (all apps)
 .next/
+
+# Local ClickHouse binary / data (never commit)
+clickhouse
+store/
+tmp/
