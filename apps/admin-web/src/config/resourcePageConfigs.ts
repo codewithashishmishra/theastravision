@@ -1,0 +1,195 @@
+import type { ResourcePageConfig } from '@/components/crud/ResourcePage';
+
+const col = (key: string, label: string) => ({ key, label });
+const txt = (key: string, label: string, required = true) => ({ key, label, type: 'text' as const, required });
+const num = (key: string, label: string) => ({ key, label, type: 'number' as const });
+const area = (key: string, label: string) => ({ key, label, type: 'textarea' as const });
+
+export const resourcePageConfigs: Record<string, ResourcePageConfig> = {
+  'attendance-regularization': {
+    title: 'Regularization Queue',
+    endpoint: '/attendance/regularizations/',
+    queryKey: 'attendance-regularizations',
+    columns: [col('employee_name', 'EMPLOYEE'), col('status', 'STATUS'), col('reason', 'REASON'), col('description', 'DESCRIPTION')],
+    readOnly: true,
+  },
+  'attendance-rosters': {
+    title: 'Shift Rosters',
+    endpoint: '/shifts/rosters/',
+    queryKey: 'shift-rosters',
+    columns: [col('id', 'ID'), col('date', 'DATE')],
+    formFields: [txt('date', 'Date'), txt('shift', 'Shift ID')],
+  },
+  'leave-policies': {
+    title: 'Leave Policies',
+    endpoint: '/leave/policies/',
+    queryKey: 'leave-policies',
+    columns: [col('annual_allowance', 'ALLOWANCE'), col('accrual_frequency', 'FREQUENCY')],
+    formFields: [num('annual_allowance', 'Annual Allowance'), txt('accrual_frequency', 'Frequency')],
+  },
+  'org-branches': {
+    title: 'Branches',
+    endpoint: '/branches/',
+    queryKey: 'branches',
+    columns: [col('name', 'NAME'), col('code', 'CODE'), col('city', 'CITY')],
+    formFields: [txt('name', 'Name'), txt('code', 'Code'), txt('address', 'Address'), txt('city', 'City'), txt('state', 'State'), txt('country', 'Country')],
+  },
+  'org-departments': {
+    title: 'Departments',
+    endpoint: '/departments/',
+    queryKey: 'departments',
+    columns: [col('name', 'NAME'), col('code', 'CODE')],
+    formFields: [txt('name', 'Name'), txt('code', 'Code')],
+  },
+  'org-designations': {
+    title: 'Designations',
+    endpoint: '/designations/',
+    queryKey: 'designations',
+    columns: [col('name', 'NAME'), col('code', 'CODE')],
+    formFields: [txt('name', 'Name'), txt('code', 'Code')],
+  },
+  'documents-templates': {
+    title: 'Letter Templates',
+    endpoint: '/engagement/announcements/',
+    queryKey: 'doc-templates',
+    columns: [col('title', 'TITLE'), col('published_at', 'PUBLISHED')],
+    formFields: [txt('title', 'Title'), area('body', 'Body')],
+  },
+  'documents-vault': {
+    title: 'Document Vault',
+    endpoint: '/employees/documents/',
+    queryKey: 'doc-vault',
+    columns: [col('document_type', 'TYPE'), col('uploaded_at', 'UPLOADED')],
+    formFields: [txt('document_type', 'Document Type'), txt('employee', 'Employee ID')],
+  },
+  'onboarding-bgv': {
+    title: 'Background Verification',
+    endpoint: '/onboarding/bgv/',
+    queryKey: 'bgv',
+    columns: [col('vendor', 'VENDOR'), col('status', 'STATUS')],
+    formFields: [txt('employee', 'Employee ID'), txt('vendor', 'Vendor'), txt('status', 'Status'), area('notes', 'Notes')],
+  },
+  'offboarding-resignations': {
+    title: 'Resignation Queue',
+    endpoint: '/offboarding/resignations/',
+    queryKey: 'resignations',
+    columns: [col('last_working_date', 'LWD'), col('status', 'STATUS'), col('reason', 'REASON')],
+    formFields: [txt('employee', 'Employee ID'), txt('last_working_date', 'Last Working Date'), area('reason', 'Reason')],
+  },
+  'offboarding-clearance': {
+    title: 'Clearance Tracker',
+    endpoint: '/offboarding/clearance-items/',
+    queryKey: 'clearance',
+    columns: [col('department', 'DEPT'), col('item', 'ITEM'), col('cleared', 'CLEARED')],
+    formFields: [txt('resignation', 'Resignation ID'), txt('department', 'Department'), txt('item', 'Item')],
+  },
+  'expenses-categories': {
+    title: 'Expense Categories',
+    endpoint: '/expenses/categories/',
+    queryKey: 'expense-categories',
+    columns: [col('name', 'NAME'), col('code', 'CODE')],
+    formFields: [txt('name', 'Name'), txt('code', 'Code')],
+  },
+  'expenses-policies': {
+    title: 'Expense Policies',
+    endpoint: '/expenses/policies/',
+    queryKey: 'expense-policies',
+    columns: [col('name', 'NAME'), col('max_amount', 'MAX')],
+    formFields: [txt('name', 'Name'), num('max_amount', 'Max Amount')],
+  },
+  'expenses-pending': {
+    title: 'Pending Expenses',
+    endpoint: '/expenses/claims/',
+    queryKey: 'expense-claims',
+    columns: [col('amount', 'AMOUNT'), col('status', 'STATUS'), col('description', 'DESCRIPTION')],
+    readOnly: true,
+  },
+  'assets-list': {
+    title: 'Asset Inventory',
+    endpoint: '/assets/items/',
+    queryKey: 'assets',
+    columns: [col('name', 'NAME'), col('serial_number', 'SERIAL'), col('status', 'STATUS')],
+    formFields: [txt('name', 'Name'), txt('serial_number', 'Serial'), txt('category', 'Category'), txt('status', 'Status')],
+  },
+  'assets-assignments': {
+    title: 'Asset Assignments',
+    endpoint: '/assets/assignments/',
+    queryKey: 'asset-assignments',
+    columns: [col('assigned_date', 'DATE')],
+    formFields: [txt('asset', 'Asset ID'), txt('employee', 'Employee ID'), txt('assigned_date', 'Date')],
+  },
+  'assets-warranties': {
+    title: 'Warranties',
+    endpoint: '/assets/warranties/',
+    queryKey: 'asset-warranties',
+    columns: [col('provider', 'PROVIDER'), col('expiry_date', 'EXPIRY')],
+    formFields: [txt('asset', 'Asset ID'), txt('provider', 'Provider'), txt('expiry_date', 'Expiry Date')],
+  },
+  'helpdesk-tickets': {
+    title: 'My Tickets',
+    endpoint: '/helpdesk/tickets/',
+    queryKey: 'helpdesk-tickets',
+    columns: [col('subject', 'SUBJECT'), col('status', 'STATUS'), col('priority', 'PRIORITY')],
+    formFields: [txt('subject', 'Subject'), area('description', 'Description'), txt('priority', 'Priority')],
+  },
+  'performance-goals': {
+    title: 'Goals',
+    endpoint: '/performance/goals/',
+    queryKey: 'goals',
+    columns: [col('title', 'TITLE'), col('status', 'STATUS'), col('target_date', 'TARGET')],
+    formFields: [txt('title', 'Title'), txt('target_date', 'Target Date'), txt('status', 'Status')],
+  },
+  'performance-reviews': {
+    title: 'Performance Reviews',
+    endpoint: '/performance/reviews/',
+    queryKey: 'reviews',
+    columns: [col('rating', 'RATING'), col('status', 'STATUS')],
+    formFields: [txt('employee', 'Employee ID'), num('rating', 'Rating'), area('comments', 'Comments')],
+  },
+  'engagement-surveys': {
+    title: 'Surveys',
+    endpoint: '/engagement/surveys/',
+    queryKey: 'surveys',
+    columns: [col('title', 'TITLE')],
+    formFields: [txt('title', 'Title'), area('questions', 'Questions JSON')],
+  },
+  'engagement-announcements': {
+    title: 'Announcements',
+    endpoint: '/engagement/announcements/',
+    queryKey: 'announcements',
+    columns: [col('title', 'TITLE'), col('published_at', 'PUBLISHED')],
+    formFields: [txt('title', 'Title'), area('body', 'Body')],
+  },
+  'payroll-components': {
+    title: 'Salary Components',
+    endpoint: '/payroll/components/',
+    queryKey: 'payroll-components',
+    columns: [col('name', 'NAME'), col('component_type', 'TYPE')],
+    formFields: [txt('name', 'Name'), txt('component_type', 'Type')],
+  },
+  'payroll-payslips': {
+    title: 'Payslips',
+    endpoint: '/payroll/payslips/',
+    queryKey: 'payroll-payslips',
+    columns: [col('net_pay', 'NET PAY'), col('month', 'MONTH')],
+    readOnly: true,
+  },
+  'audit-logins': {
+    title: 'Login Audit',
+    endpoint: '/users/',
+    queryKey: 'audit-logins',
+    columns: [col('email', 'EMAIL'), col('username', 'USERNAME')],
+    readOnly: true,
+  },
+  'policies-holidays': {
+    title: 'Holiday Calendar',
+    endpoint: '/holidays/',
+    queryKey: 'holidays',
+    columns: [col('name', 'NAME'), col('date', 'DATE')],
+    formFields: [txt('name', 'Name'), txt('date', 'Date')],
+  },
+};
+
+export function getResourceConfig(slug: string): ResourcePageConfig | null {
+  return resourcePageConfigs[slug] ?? null;
+}
