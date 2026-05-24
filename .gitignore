@@ -5,8 +5,6 @@ env/
 node_modules/
 __pycache__/
 *.pyc
-.cursor/
-.vscode/
 apps/api/venv/
 apps/ai-service/venv/
 .idea/
