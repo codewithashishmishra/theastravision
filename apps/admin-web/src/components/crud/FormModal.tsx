@@ -1,9 +1,10 @@
 'use client';
 
-import React from 'react';
+import React, { useState } from 'react';
 import {
   Modal, ModalContent, ModalHeader, ModalBody, ModalFooter, Button, Input, Textarea, Select, SelectItem,
 } from '@nextui-org/react';
+import { validateRequired } from '@/lib/validation';
 
 export type FormField = {
   key: string;
@@ -11,6 +12,8 @@ export type FormField = {
   type?: 'text' | 'number' | 'date' | 'textarea' | 'select';
   options?: { value: string; label: string }[];
   required?: boolean;
+  maxLength?: number;
+  validate?: (value: string) => string | undefined;
 };
 
 type FormModalProps = {
@@ -38,6 +41,28 @@ export function FormModal({
   isDisabled,
   submitLabel = 'Save',
 }: FormModalProps) {
+  const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
+
+  const handleSubmit = () => {
+    const next: Record<string, string> = {};
+    fields.forEach((field) => {
+      const value = formData[field.key] ?? '';
+      if (field.validate) {
+        const err = field.validate(value);
+        if (err) next[field.key] = err;
+      } else if (field.required) {
+        const err = validateRequired(value, field.label);
+        if (err) next[field.key] = err;
+      }
+    });
+    if (Object.keys(next).length) {
+      setFieldErrors(next);
+      return;
+    }
+    setFieldErrors({});
+    onSubmit();
+  };
+
   return (
     <Modal isOpen={isOpen} onOpenChange={onOpenChange} size="2xl" scrollBehavior="inside">
       <ModalContent>
@@ -82,6 +107,9 @@ export function FormModal({
                     value={formData[field.key] ?? ''}
                     onValueChange={(v) => onChange(field.key, v)}
                     isRequired={field.required}
+                    maxLength={field.maxLength}
+                    errorMessage={fieldErrors[field.key]}
+                    isInvalid={!!fieldErrors[field.key]}
                   />
                 );
               })}
@@ -92,7 +120,7 @@ export function FormModal({
                 color="primary"
                 isLoading={isLoading}
                 isDisabled={isDisabled || isLoading}
-                onPress={onSubmit}
+                onPress={handleSubmit}
               >
                 {submitLabel}
               </Button>

@@ -108,7 +108,10 @@ export function TaxDeclarationsPage() {
   const queryClient = useQueryClient();
   const [jurisdiction, setJurisdiction] = useState<Jurisdiction>(jurisdictions[0] ?? 'IN');
   const [fy, setFy] = useState('2025');
-  const [sectionsJson, setSectionsJson] = useState('{"section_80c": 0, "section_80d": 0}');
+  const [section80c, setSection80c] = useState('0');
+  const [section80d, setSection80d] = useState('0');
+  const [hraRent, setHraRent] = useState('0');
+  const [taxRegime, setTaxRegime] = useState('new');
   const [tipsResult, setTipsResult] = useState<TaxTipsResult | null>(null);
   const [tipsError, setTipsError] = useState('');
 
@@ -138,7 +141,17 @@ export function TaxDeclarationsPage() {
 
   const saveMutation = useMutation({
     mutationFn: async () => {
-      const sections = JSON.parse(sectionsJson);
+      const sections =
+        jurisdiction === 'IN'
+          ? {
+              section_80c: Number(section80c) || 0,
+              section_80d: Number(section80d) || 0,
+              hra_rent_paid: Number(hraRent) || 0,
+              tax_regime: taxRegime,
+            }
+          : JSON.parse(
+              `{"section_80c": ${Number(section80c) || 0}, "section_80d": ${Number(section80d) || 0}}`,
+            );
       const existing = declarations?.[0];
       const payload = {
         jurisdiction,
@@ -209,13 +222,46 @@ export function TaxDeclarationsPage() {
             ))}
           </Select>
           <Input label="Fiscal / Tax Year" value={fy} onValueChange={setFy} />
-          <Textarea
-            label="Declaration JSON"
-            value={sectionsJson}
-            onValueChange={setSectionsJson}
-            minRows={4}
-            description={`Example: ${hint}`}
-          />
+          {jurisdiction === 'IN' ? (
+            <>
+              <Input
+                type="number"
+                label="Section 80C investments (₹)"
+                description="PPF, ELSS, life insurance, etc. Max ₹1.5L"
+                value={section80c}
+                onValueChange={setSection80c}
+              />
+              <Input
+                type="number"
+                label="Section 80D health insurance (₹)"
+                description="Self/family medical insurance premiums"
+                value={section80d}
+                onValueChange={setSection80d}
+              />
+              <Input
+                type="number"
+                label="HRA rent paid annually (₹)"
+                value={hraRent}
+                onValueChange={setHraRent}
+              />
+              <Select
+                label="Tax regime"
+                selectedKeys={[taxRegime]}
+                onSelectionChange={(k) => setTaxRegime(String(Array.from(k)[0] ?? 'new'))}
+              >
+                <SelectItem key="new">New regime</SelectItem>
+                <SelectItem key="old">Old regime</SelectItem>
+              </Select>
+            </>
+          ) : (
+            <Textarea
+              label="Declaration details"
+              value={`80C: ${section80c}, 80D: ${section80d}`}
+              isReadOnly
+              minRows={2}
+              description="Contact payroll admin for US/CA declaration forms."
+            />
+          )}
           <Button color="primary" onPress={() => saveMutation.mutate()} isLoading={saveMutation.isPending}>
             Submit Declaration
           </Button>

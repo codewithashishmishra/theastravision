@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import re
 
 from django.conf import settings
 from django.http import JsonResponse, StreamingHttpResponse
@@ -11,7 +12,21 @@ from django.utils.deprecation import MiddlewareMixin
 from core.e2ee.services import encrypt_response_for_session
 
 
+# Public AI interview routes carry large TTS/base64 payloads — keep plaintext JSON.
+_AI_SESSION_PUBLIC_PATH = re.compile(
+    r"^/api/v1/recruitment/ai-sessions/[^/]+/(?:speak|questions/next|verify|start|preflight|"
+    r"feedback|complete-voice|questions/skip|live(?:/chunks|/finalize-recording)?|tts/\d+)/?$"
+)
+
+
 class E2EEResponseMiddleware(MiddlewareMixin):
+    TRACKER_BROWSER_AUTH_EXEMPT_PATHS = {
+        "/api/v1/tracker/auth/browser",
+        "/api/v1/auth/login/password",
+        "/api/v1/auth/totp/verify-login",
+        "/api/v1/tracker/auth/bootstrap",
+    }
+
     EXEMPT_PREFIXES = (
         "/admin/",
         "/static/",
@@ -23,15 +38,23 @@ class E2EEResponseMiddleware(MiddlewareMixin):
         return getattr(settings, "E2EE_ENABLED", False)
 
     def _is_exempt(self, path: str) -> bool:
-        if path.rstrip("/") == "/api/v1/public/e2ee/handshake":
+        norm = path.rstrip("/")
+        if norm == "/api/v1/public/e2ee/handshake":
+            return True
+        if norm in self.TRACKER_BROWSER_AUTH_EXEMPT_PATHS:
             return True
         if path.startswith("/api/v1/internal/e2ee/"):
+            return True
+        if _AI_SESSION_PUBLIC_PATH.match(path.rstrip("/")):
+            return True
+        # List/detail without sub-action still uses E2EE; verify token is under verify/{token}
+        if re.match(r"^/api/v1/recruitment/ai-sessions/verify/[^/]+/?$", path.rstrip("/")):
             return True
         return any(path.startswith(p) for p in self.EXEMPT_PREFIXES)
 
     def _wants_json(self, request) -> bool:
         accept = request.META.get("HTTP_ACCEPT", "")
-        if "application/json" in accept or "*/*" in accept or not accept:
+        if "application/json" in accept or accept == "":
             return True
         content_type = request.META.get("CONTENT_TYPE", "")
         return "application/json" in content_type

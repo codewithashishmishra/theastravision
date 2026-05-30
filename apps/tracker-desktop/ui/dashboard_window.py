@@ -90,6 +90,22 @@ class DashboardWindow(QMainWindow):
         self._set_banner_idle()
         layout.addWidget(self.status_banner)
 
+        self.live_timer = QLabel("00:00:00")
+        self.live_timer.setObjectName("heading")
+        self.live_timer.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self.live_timer.setStyleSheet(
+            f"font-size: 42px; font-weight: 700; color: {COLORS['text']}; letter-spacing: 2px;"
+        )
+        layout.addWidget(self.live_timer)
+
+        self.paused_timer = QLabel("")
+        self.paused_timer.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self.paused_timer.setStyleSheet(
+            f"font-size: 18px; font-weight: 600; color: {COLORS['warning']};"
+        )
+        self.paused_timer.hide()
+        layout.addWidget(self.paused_timer)
+
         info_card = QFrame()
         info_card.setObjectName("card")
         info_layout = QVBoxLayout(info_card)
@@ -107,11 +123,6 @@ class DashboardWindow(QMainWindow):
         self.sync_label.setObjectName("info")
         info_layout.addWidget(self.sync_label)
         layout.addWidget(info_card)
-
-        footer = QLabel("© theastravision.com")
-        footer.setObjectName("subtitle")
-        footer.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        layout.addWidget(footer)
 
         self.start_btn = QPushButton("Start Work")
         self.start_btn.setObjectName("primary")
@@ -166,12 +177,36 @@ class DashboardWindow(QMainWindow):
         layout.addWidget(session_note)
         layout.addStretch()
 
+        footer = QLabel("© theastravision.com")
+        footer.setObjectName("subtitle")
+        footer.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        layout.addWidget(footer)
+
         scroll.setWidget(container)
         return scroll
 
     def _refresh_stats_panel(self):
         if self.session_manager:
+            stats = self.session_manager.stats
+            # Main timer reflects productive tracked work time and freezes while paused.
+            total = int((stats.active_sec or 0) + (stats.idle_sec or 0))
+            h = total // 3600
+            m = (total % 3600) // 60
+            s = total % 60
+            self.live_timer.setText(f"{h:02d}:{m:02d}:{s:02d}")
+            if self.session_manager._paused:
+                ps = int(stats.paused_sec or 0)
+                ph = ps // 3600
+                pm = (ps % 3600) // 60
+                psec = ps % 60
+                self.paused_timer.setText(f"Paused: {ph:02d}:{pm:02d}:{psec:02d}")
+                self.paused_timer.show()
+            else:
+                self.paused_timer.hide()
             self.stats_panel.update_from_stats(self.session_manager.stats)
+        else:
+            self.live_timer.setText("00:00:00")
+            self.paused_timer.hide()
 
     def _set_banner_idle(self):
         self.status_banner.setText("NOT TRACKING")

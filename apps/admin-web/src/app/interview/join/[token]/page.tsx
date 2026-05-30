@@ -4,6 +4,8 @@ import { useEffect, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { Button, Card, CardBody, Checkbox, Spinner } from '@nextui-org/react';
 import publicApi from '@/lib/publicApi';
+import { setInterviewMagicToken } from '@/lib/interviewLiveUpload';
+import { AstraAvatar, InterviewShell } from '@/components/interview/InterviewShell';
 
 type SessionInfo = {
   id: string;
@@ -11,7 +13,7 @@ type SessionInfo = {
   job_title: string;
   expires_at: string;
   question_count: number;
-  assessment_enabled: boolean;
+  include_assessment: boolean;
 };
 
 export default function InterviewJoinPage() {
@@ -27,7 +29,19 @@ export default function InterviewJoinPage() {
     publicApi
       .get(`/recruitment/ai-sessions/verify/${token}/`)
       .then((res) => setInfo(res.data))
-      .catch((err) => setError(err.response?.data?.error || 'Invalid or expired link.'))
+      .catch((err) => {
+        const status = err.response?.status;
+        const msg = err.response?.data?.error;
+        if (status === 404) {
+          setError('This interview link is invalid. Check that you copied the full URL from your invite email.');
+        } else if (status === 403) {
+          setError(msg || 'This interview link has expired. Ask HR to send a new invite.');
+        } else if (status === 428) {
+          setError('Secure connection could not be established. Refresh the page or try another browser.');
+        } else {
+          setError(msg || 'Unable to verify this interview link. Try again or contact HR.');
+        }
+      })
       .finally(() => setLoading(false));
   }, [token]);
 
@@ -35,8 +49,8 @@ export default function InterviewJoinPage() {
     if (!info || !consent) return;
     setStarting(true);
     try {
-      await publicApi.post(`/recruitment/ai-sessions/${info.id}/start/`);
-      router.push(`/interview/${info.id}/live`);
+      setInterviewMagicToken(info.id, token);
+      router.push(`/interview/${info.id}/preflight`);
     } catch (err: unknown) {
       const e = err as { response?: { data?: { error?: string } } };
       setError(e.response?.data?.error || 'Could not start interview.');
@@ -67,41 +81,38 @@ export default function InterviewJoinPage() {
   }
 
   return (
-    <div className="mx-auto flex min-h-screen max-w-lg flex-col justify-center gap-8 p-6">
-      <div className="text-center">
-        <p className="text-sm uppercase tracking-widest text-violet-400">AastraaHR</p>
-        <h1 className="mt-2 text-3xl font-bold">Meet Astra</h1>
-        <p className="mt-2 text-default-400">AI voice interview for {info.job_title}</p>
-      </div>
-      <Card className="bg-slate-800/60 border border-white/10">
+    <InterviewShell step={1} subtitle={`AI voice interview — ${info.job_title}`}>
+      <Card className="border border-white/10 bg-slate-800/80">
         <CardBody className="gap-6 p-8">
-          <p className="text-lg">
-            Hello <strong>{info.candidate_name}</strong>, Astra will ask you about{' '}
-            <strong>{info.question_count}</strong> topics based on your profile and the role.
+          <AstraAvatar />
+          <h1 className="text-center text-2xl font-bold">Meet Astra</h1>
+          <p className="text-center text-slate-400">
+            Hello <strong>{info.candidate_name}</strong>, your virtual interviewer will guide you through{' '}
+            <strong>{info.question_count}</strong> voice questions tailored to this role.
           </p>
-          <ul className="list-disc space-y-2 pl-5 text-sm text-default-400">
-            <li>Astra speaks in English (Indian accent).</li>
-            <li>You may answer in <strong>English or Hindi</strong>; answers are evaluated in English.</li>
-            <li>Use a quiet room and allow microphone access.</li>
-            {info.assessment_enabled && (
-              <li>After the voice interview, you may complete a proctored online assessment.</li>
+          <ul className="list-disc space-y-2 pl-5 text-sm text-slate-400">
+            <li>Astra will speak each question aloud (English).</li>
+            <li>You may answer in <strong>English or Hindi</strong>; responses are evaluated in English.</li>
+            <li>Next you will enable camera, screen share, and microphone.</li>
+            {info.include_assessment && (
+              <li>After the voice interview, you may complete a short online assessment.</li>
             )}
           </ul>
           <Checkbox isSelected={consent} onValueChange={setConsent} classNames={{ label: 'text-sm' }}>
-            I consent to recording my voice for this interview.
+            I consent to voice, video, and screen recording for this interview.
           </Checkbox>
           <Button
             color="primary"
             size="lg"
-            className="font-bold"
+            className="w-full font-bold"
             isDisabled={!consent}
             isLoading={starting}
             onPress={handleStart}
           >
-            Start interview with Astra
+            Continue to setup
           </Button>
         </CardBody>
       </Card>
-    </div>
+    </InterviewShell>
   );
 }

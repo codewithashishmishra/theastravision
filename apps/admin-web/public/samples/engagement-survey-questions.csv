@@ -1,0 +1,4 @@
+question,text,type
+q1,How satisfied are you with your role?,rating
+q2,What could we improve?,text
+q3,Would you recommend us as a workplace?,choice

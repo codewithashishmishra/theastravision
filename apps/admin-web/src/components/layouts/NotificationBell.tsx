@@ -3,6 +3,7 @@
 import React, { useEffect, useState, useCallback, useRef } from 'react';
 import { Button, Dropdown, DropdownTrigger, DropdownMenu, DropdownItem, Chip } from '@nextui-org/react';
 import { Bell } from 'lucide-react';
+import { useRouter } from 'next/navigation';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { notificationsApi } from '@/lib/hrmsApi';
 import { unwrapList } from '@/lib/hrmsApi';
@@ -14,6 +15,8 @@ type Notification = {
   message: string;
   is_read: boolean;
   created_at: string;
+  category?: string;
+  link?: string;
 };
 
 function wsUrl() {
@@ -25,6 +28,7 @@ function wsUrl() {
 const REST_POLL_MS = 60_000;
 
 export function NotificationBell() {
+  const router = useRouter();
   const queryClient = useQueryClient();
   const [live, setLive] = useState<Notification[]>([]);
   const [wsConnected, setWsConnected] = useState(false);
@@ -151,7 +155,10 @@ export function NotificationBell() {
             <DropdownItem
               key={n.id}
               description={n.message}
-              onPress={() => !n.is_read && markRead.mutate(n.id)}
+              onPress={() => {
+                if (!n.is_read) markRead.mutate(n.id);
+                if (n.link) router.push(n.link);
+              }}
             >
               <span className="flex items-center gap-2">
                 {!n.is_read && <Chip size="sm" color="primary" variant="dot">New</Chip>}

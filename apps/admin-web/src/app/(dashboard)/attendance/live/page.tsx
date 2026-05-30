@@ -26,22 +26,19 @@ export default function AttendanceLiveLogsPage() {
   const { data: logs = [], isLoading } = useQuery({
     queryKey: ['attendance_logs'],
     queryFn: async () => {
-      // In MVP, we might not have seeded attendance logs, so handle empty gracefully
-      try {
-        const res = await axios.get('/attendance/logs/');
-        return res.data.results || [];
-      } catch {
-        return MOCK_LOGS; // Fallback for UI visualization
-      }
-    }
+      const res = await axios.get('/attendance/logs/', { params: { page_size: 50 } });
+      const rows = res.data.results || [];
+      return rows.map((row: Record<string, unknown>) => ({
+        ...row,
+        employee_name: row.employee_name ?? `${row.employee_first_name ?? ''} ${row.employee_last_name ?? ''}`.trim(),
+        date: row.date ?? row.work_date ?? '—',
+        punch_in: row.check_in ? new Date(String(row.check_in)).toLocaleTimeString() : '—',
+        punch_out: row.check_out ? new Date(String(row.check_out)).toLocaleTimeString() : '—',
+        location: row.punch_source ?? row.location ?? '—',
+        status: row.check_out ? 'Present' : row.check_in ? 'Active' : 'Absent',
+      }));
+    },
   });
-
-  // Mock data for UI demonstration if DB is empty
-  const MOCK_LOGS = [
-    { id: '1', employee_name: 'John Doe', date: '2026-05-23', punch_in: '09:00 AM', punch_out: '06:00 PM', status: 'Present', location: 'Office' },
-    { id: '2', employee_name: 'Sarah Smith', date: '2026-05-23', punch_in: '09:15 AM', punch_out: null, status: 'Active', location: 'Remote' },
-    { id: '3', employee_name: 'Mike Johnson', date: '2026-05-23', punch_in: null, punch_out: null, status: 'Absent', location: '-' },
-  ];
 
   const handlePunch = () => {
     if (!isPunchedIn) {

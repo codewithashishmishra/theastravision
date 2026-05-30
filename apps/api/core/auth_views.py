@@ -28,7 +28,7 @@ def _set_refresh_cookie(response, refresh_token_str, request):
         value=refresh_token_str,
         httponly=True,
         secure=not settings.DEBUG,
-        samesite='Strict',
+        samesite='Lax' if settings.DEBUG else 'Strict',
     )
     return response
 
@@ -276,6 +276,13 @@ class MeView(APIView):
     permission_classes = [IsAuthenticated]
 
     def get(self, request):
+        return Response(serialize_auth_me(request.user, request=request))
+
+    def patch(self, request):
+        display_name = request.data.get('display_name')
+        if display_name is not None:
+            request.user.display_name = str(display_name).strip()[:255]
+            request.user.save(update_fields=['display_name'])
         return Response(serialize_auth_me(request.user, request=request))
 
 

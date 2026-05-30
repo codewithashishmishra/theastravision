@@ -25,7 +25,7 @@ export default function Providers({ children }: { children: React.ReactNode }) {
   return (
     <QueryClientProvider client={queryClient}>
       <NextUIProvider navigate={router.push}>
-        <NextThemesProvider attribute="class" defaultTheme="dark" themes={['light', 'dark', 'tenant-dark', 'tenant-light']}>
+        <NextThemesProvider attribute="class" defaultTheme="dark" storageKey="aastraa-theme" themes={['light', 'dark', 'tenant-dark', 'tenant-light']}>
           <E2EEProvider>{children}</E2EEProvider>
         </NextThemesProvider>
       </NextUIProvider>

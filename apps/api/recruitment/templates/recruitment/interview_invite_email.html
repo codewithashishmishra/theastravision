@@ -1,0 +1,69 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Interview invitation</title>
+</head>
+<body style="margin:0;padding:0;background:#f4f6f8;font-family:Segoe UI,Helvetica,Arial,sans-serif;color:#1a1a2e;">
+  <span style="display:none;max-height:0;overflow:hidden;">Your AI voice interview with Astra is ready — {{ job_title }}</span>
+  <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="background:#f4f6f8;padding:32px 16px;">
+    <tr>
+      <td align="center">
+        <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="max-width:560px;background:#ffffff;border-radius:12px;overflow:hidden;box-shadow:0 2px 8px rgba(0,0,0,0.06);">
+          <tr>
+            <td style="background:#1e293b;padding:24px 32px;">
+              <p style="margin:0;font-size:13px;letter-spacing:0.08em;color:#94a3b8;text-transform:uppercase;">{{ company_name }}</p>
+              <h1 style="margin:8px 0 0;font-size:22px;font-weight:600;color:#ffffff;">AI voice interview invitation</h1>
+            </td>
+          </tr>
+          <tr>
+            <td style="padding:32px;">
+              <p style="margin:0 0 16px;font-size:16px;line-height:1.6;">Dear {{ candidate_first_name }},</p>
+              <p style="margin:0 0 16px;font-size:15px;line-height:1.6;color:#334155;">
+                Thank you for your interest in the <strong>{{ job_title }}</strong> position. We invite you to complete a short AI-assisted voice interview with <strong>Astra</strong>, our virtual interviewer.
+              </p>
+              {% if scheduled_display %}
+              <p style="margin:0 0 16px;padding:16px;background:#f8fafc;border-left:4px solid #ea580c;font-size:15px;line-height:1.5;">
+                <strong>Scheduled time:</strong><br />{{ scheduled_display }}
+              </p>
+              {% endif %}
+              <p style="margin:0 0 24px;font-size:14px;line-height:1.6;color:#64748b;">
+                You may respond in English or Hindi; answers are evaluated in English. Please use a quiet room and a stable internet connection. Allow microphone, camera, and screen sharing when prompted.
+              </p>
+              <table role="presentation" cellspacing="0" cellpadding="0">
+                <tr>
+                  <td style="border-radius:8px;background:#ea580c;">
+                    <a href="{{ interview_link }}" style="display:inline-block;padding:14px 28px;font-size:15px;font-weight:600;color:#ffffff;text-decoration:none;">Begin interview</a>
+                  </td>
+                </tr>
+              </table>
+              <p style="margin:24px 0 0;font-size:13px;line-height:1.5;color:#94a3b8;">
+                If the button does not work, copy this link into your browser:<br />
+                <a href="{{ interview_link }}" style="color:#2563eb;word-break:break-all;">{{ interview_link }}</a>
+              </p>
+              {% if has_expiry %}
+              <p style="margin:16px 0 0;font-size:13px;color:#94a3b8;">
+                This invitation link expires on <strong>{{ expiry_display }}</strong>.
+              </p>
+              {% else %}
+              <p style="margin:16px 0 0;font-size:13px;color:#94a3b8;">
+                This link remains valid until you complete your interview.
+              </p>
+              {% endif %}
+            </td>
+          </tr>
+          <tr>
+            <td style="padding:20px 32px;background:#f8fafc;border-top:1px solid #e2e8f0;">
+              <p style="margin:0;font-size:12px;color:#94a3b8;line-height:1.5;">
+                This is a transactional message regarding your job application. Please do not reply to this email unless you need assistance.
+              </p>
+              <p style="margin:8px 0 0;font-size:12px;color:#94a3b8;">© {{ company_name }}</p>
+            </td>
+          </tr>
+        </table>
+      </td>
+    </tr>
+  </table>
+</body>
+</html>

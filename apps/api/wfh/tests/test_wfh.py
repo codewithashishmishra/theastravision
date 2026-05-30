@@ -6,8 +6,9 @@ from django.utils import timezone
 from core.models import Tenant, User
 from employees.models import Employee
 from organization.models import Department
-from wfh.models import EmployeeConsent, WFHPolicy, WFHRequest
+from wfh.models import EmployeeConsent, ProductivityRule, WFHPolicy, WFHRequest
 from wfh.services.approval import hr_approve, manager_approve
+from wfh.services.productivity import classify_focus
 from wfh.services.session import get_approved_wfh_for_today
 
 
@@ -71,3 +72,26 @@ class WFHApprovalTests(TestCase):
         self.assertTrue(
             EmployeeConsent.objects.filter(employee=self.employee, revoked_at__isnull=True).exists()
         )
+
+
+class ProductivityRuleTests(TestCase):
+    def setUp(self):
+        self.tenant = Tenant.objects.create(name="Prod Co", domain="prodco")
+
+    def test_exact_rule_classification(self):
+        rule = ProductivityRule.objects.create(
+            tenant=self.tenant,
+            name="VSCode",
+            target_type=ProductivityRule.TARGET_APP,
+            match_type=ProductivityRule.MATCH_EXACT,
+            pattern="code",
+            is_productive=True,
+        )
+        is_productive, matched = classify_focus(self.tenant.id, "code", "project")
+        self.assertTrue(is_productive)
+        self.assertEqual(matched.id, rule.id)
+
+    def test_unmatched_defaults_to_unproductive(self):
+        is_productive, matched = classify_focus(self.tenant.id, "spotify", "music")
+        self.assertFalse(is_productive)
+        self.assertIsNone(matched)

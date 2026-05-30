@@ -1,0 +1,339 @@
+<!DOCTYPE html>
+<html lang="en-IN" class="scroll-smooth">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AASTRAA WFH Tracker | AASTRAA HRMS</title>
+    <meta name="description" content="Advanced WFH tracker and monitoring desktop app for remote teams, ensuring productivity while respecting privacy.">
+    <link rel="icon" type="image/png" href="https://theastravision.com/logo.png">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;500;700&display=swap" rel="stylesheet">
+    <script src="https://cdn.tailwindcss.com?plugins=typography"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    fontFamily: {
+                        sans: ['Roboto', 'sans-serif'],
+                    },
+                    colors: {
+                        primary: {
+                            50: '#fff7ed', 100: '#ffedd5', 500: '#f97316', 600: '#ea580c', 700: '#c2410c', 900: '#7c2d12',
+                        },
+                        surface: '#ffffff',
+                        background: '#f8fafc',
+                    },
+                    boxShadow: {
+                        'material': '0 2px 1px -1px rgba(0,0,0,.2),0 1px 1px 0 rgba(0,0,0,.14),0 1px 3px 0 rgba(0,0,0,.12)',
+                        'material-hover': '0 5px 5px -3px rgba(0,0,0,.2),0 8px 10px 1px rgba(0,0,0,.14),0 3px 14px 2px rgba(0,0,0,.12)',
+                    }
+                }
+            }
+        }
+    </script>
+
+    <meta property="og:title" content="AASTRAA WFH Tracker">
+    <meta property="og:description" content="Advanced WFH tracker and monitoring desktop app for remote teams, ensuring productivity while respecting privacy.">
+    <meta property="og:image" content="https://theastravision.com/logo.png">
+    <meta property="og:type" content="website">
+    <meta property="og:url" content="https://theastravision.com/product-wfh.html">
+    <meta name="twitter:card" content="summary_large_image">
+    <link rel="canonical" href="https://theastravision.com/product-wfh.html">
+    <script type="application/ld+json">
+{
+    "@context": "https://schema.org",
+    "@type": "SoftwareApplication",
+    "name": "AASTRAA WFH Tracker",
+    "operatingSystem": "Windows, macOS, Linux",
+    "applicationCategory": "BusinessApplication",
+    "offers": {
+        "@type": "Offer",
+        "price": "2999",
+        "priceCurrency": "INR"
+    }
+}
+    </script>
+</head>
+<body class="font-sans bg-background text-slate-800 antialiased selection:bg-primary-100 selection:text-primary-700">
+
+    <!-- Navigation -->
+    <nav class="fixed w-full bg-white/90 backdrop-blur-md shadow-material z-50 transition-all duration-300"
+        id="navbar" aria-label="Main Navigation">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div class="flex justify-between items-center h-20">
+                <a href="https://theastravision.com" class="flex items-center gap-3">
+                    <img src="aastraa_logo.png" width="40" height="40" decoding="async"
+                        onerror="this.src='https://placehold.co/40x40/ea580c/white?text=A'" alt="AASTRAA HRMS Logo"
+                        title="Astra HR Management System Logo"
+                        class="w-10 h-10 rounded-lg shadow-md object-cover border border-slate-100">
+                    <span class="font-bold text-2xl tracking-tight text-slate-900">The<span
+                            class="text-primary-600 font-light">Astravision</span></span>
+                </a>
+
+                <!-- Desktop Menu -->
+                <div class="hidden md:flex space-x-8 items-center">
+                    <a href="#home" title="AASTRAA HRMS Home"
+                        class="text-slate-600 hover:text-primary-600 font-medium transition-colors">Home</a>
+
+                    <!-- Products Dropdown -->
+                    <div class="relative group">
+                        <button
+                            class="text-slate-600 hover:text-primary-600 font-medium transition-colors flex items-center gap-1">
+                            Products <i
+                                class="fa-solid fa-chevron-down text-[10px] transition-transform group-hover:rotate-180"></i>
+                        </button>
+                        <!-- Dropdown Menu / Cards -->
+                        <div
+                            class="absolute left-1/2 -translate-x-1/2 top-full pt-4 w-[400px] lg:w-[600px] opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all duration-300 z-50">
+                            <div
+                                class="bg-white rounded-2xl shadow-xl border border-slate-100 p-4 grid grid-cols-1 lg:grid-cols-2 gap-4 relative">
+                                <!-- Top triangle pointer -->
+                                <div
+                                    class="absolute -top-2 left-1/2 -translate-x-1/2 w-4 h-4 bg-white border-l border-t border-slate-100 rotate-45">
+                                </div>
+
+                                <a href="product-hrms.html"
+                                    class="flex items-start gap-4 p-4 rounded-xl hover:bg-slate-50 transition-colors border border-transparent hover:border-slate-100 z-10 relative bg-white">
+                                    <img src="aastraa_logo.png" class="w-12 h-12 rounded-lg object-cover shadow-sm">
+                                    <div>
+                                        <h4 class="font-bold text-slate-900 text-sm">AASTRAA HRMS</h4>
+                                        <p class="text-xs text-slate-500 mt-1 leading-snug">Flagship platform with
+                                            payroll & attendance.</p>
+                                    </div>
+                                </a>
+                                <a href="product-wfh.html"
+                                    class="flex items-start gap-4 p-4 rounded-xl hover:bg-slate-50 transition-colors border border-transparent hover:border-slate-100 z-10 relative bg-white">
+                                    <img src="aastraa_wfh.png"
+                                        onerror="this.src='https://placehold.co/40x40/ea580c/white?text=W'"
+                                        class="w-12 h-12 rounded-lg object-cover shadow-sm">
+                                    <div>
+                                        <h4 class="font-bold text-slate-900 text-sm">WFH Tracker</h4>
+                                        <p class="text-xs text-slate-500 mt-1 leading-snug">Desktop session monitoring &
+                                            screenshots.</p>
+                                    </div>
+                                </a>
+                                <a href="product-ats-interviewer.html"
+                                    class="flex items-start gap-4 p-4 rounded-xl hover:bg-slate-50 transition-colors border border-transparent hover:border-slate-100 z-10 relative bg-white">
+                                    <img src="aastraa_interviewer.png"
+                                        onerror="this.src='https://placehold.co/40x40/ea580c/white?text=I'"
+                                        class="w-12 h-12 rounded-lg object-cover shadow-sm">
+                                    <div>
+                                        <h4 class="font-bold text-slate-900 text-sm">AI ATS & Interviewer</h4>
+                                        <p class="text-xs text-slate-500 mt-1 leading-snug">Resume parsing & automated
+                                            screening.</p>
+                                    </div>
+                                </a>
+                                <a href="product-jobboard.html"
+                                    class="flex items-start gap-4 p-4 rounded-xl hover:bg-slate-50 transition-colors border border-transparent hover:border-slate-100  z-10 relative bg-white">
+                                    <img src="aastraa_jobboard.png"
+                                        onerror="this.src='https://placehold.co/40x40/ea580c/white?text=J'"
+                                        class="w-12 h-12 rounded-lg object-cover shadow-sm">
+                                    <div>
+                                        <h4 class="font-bold text-slate-900 text-sm">Job Boards</h4>
+                                        <p class="text-xs text-slate-500 mt-1 leading-snug">Embeddable career portals to
+                                            attract top candidates directly.</p>
+                                    </div>
+                                </a>
+                            </div>
+                        </div>
+                    </div>
+
+                    <a href="blogs.html" title="Blogs"
+                        class="text-slate-600 hover:text-primary-600 font-medium transition-colors">Blogs</a>
+                    <a href="#contact" title="Get AASTRAA HRMS Demo"
+                        class="bg-primary-600 hover:bg-primary-700 text-white px-6 py-2.5 rounded-full font-medium transition-all shadow-md hover:shadow-lg">Get
+                        Demo</a>
+                </div>
+
+                <!-- Mobile Menu Button -->
+                <div class="md:hidden flex items-center">
+                    <button id="mobile-menu-btn" aria-label="Toggle Mobile Menu"
+                        class="text-slate-600 hover:text-primary-600 focus:outline-none">
+                        <i class="fa-solid fa-bars text-2xl"></i>
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Mobile Menu -->
+        <div id="mobile-menu"
+            class="hidden md:hidden bg-surface border-t border-slate-100 absolute w-full max-h-[80vh] overflow-y-auto">
+            <div class="px-2 pt-2 pb-3 space-y-1 sm:px-3 shadow-material">
+                <a href="#home"
+                    class="block px-3 py-2 rounded-md text-base font-medium text-slate-700 hover:text-primary-600 hover:bg-slate-50">Home</a>
+
+                <!-- Mobile Products Group -->
+                <div class="block px-3 py-3 rounded-md text-base font-medium text-slate-900 bg-slate-50">
+                    <div class="mb-3 px-1 text-slate-700">Products</div>
+                    <div class="grid grid-cols-2 gap-2">
+                        <a href="product-hrms.html"
+                            class="flex flex-col items-center text-center p-3 rounded-xl bg-white border border-slate-200 shadow-sm hover:border-primary-300 transition-colors">
+                            <img src="aastraa_logo.png" class="w-10 h-10 rounded-lg object-cover mb-2 shadow-sm">
+                            <span class="text-xs font-bold text-slate-800 leading-tight">AASTRAA HRMS</span>
+                        </a>
+                        <a href="product-wfh.html"
+                            class="flex flex-col items-center text-center p-3 rounded-xl bg-white border border-slate-200 shadow-sm hover:border-primary-300 transition-colors">
+                            <img src="aastraa_wfh.png"
+                                onerror="this.src='https://placehold.co/40x40/ea580c/white?text=W'"
+                                class="w-10 h-10 rounded-lg object-cover mb-2 shadow-sm">
+                            <span class="text-xs font-bold text-slate-800 leading-tight">WFH Tracker</span>
+                        </a>
+                        <a href="product-ats-interviewer.html"
+                            class="flex flex-col items-center text-center p-3 rounded-xl bg-white border border-slate-200 shadow-sm hover:border-primary-300 transition-colors">
+                            <img src="aastraa_interviewer.png"
+                                onerror="this.src='https://placehold.co/40x40/ea580c/white?text=I'"
+                                class="w-10 h-10 rounded-lg object-cover mb-2 shadow-sm">
+                            <span class="text-xs font-bold text-slate-800 leading-tight">AI ATS & Interviewer</span>
+                        </a>
+                        <a href="product-jobboard.html"
+                            class="flex flex-col items-center text-center p-3 rounded-xl bg-white border border-slate-200 shadow-sm hover:border-primary-300 transition-colors">
+                            <img src="aastraa_jobboard.png"
+                                onerror="this.src='https://placehold.co/40x40/ea580c/white?text=J'"
+                                class="w-10 h-10 rounded-lg object-cover mb-2 shadow-sm">
+                            <span class="text-xs font-bold text-slate-800 leading-tight">Job Boards</span>
+                        </a>
+                    </div>
+                </div>
+
+                <a href="#features"
+                    class="block px-3 py-2 rounded-md text-base font-medium text-slate-700 hover:text-primary-600 hover:bg-slate-50">Features</a>
+                <a href="blogs.html"
+                    class="block px-3 py-2 rounded-md text-base font-medium text-slate-700 hover:text-primary-600 hover:bg-slate-50">Blogs</a>
+                <a href="#pricing"
+                    class="block px-3 py-2 rounded-md text-base font-medium text-slate-700 hover:text-primary-600 hover:bg-slate-50">Pricing</a>
+                <a href="#contact"
+                    class="block px-3 py-2 rounded-md text-base font-medium text-primary-600 hover:bg-slate-50">Contact
+                    Us</a>
+            </div>
+        </div>
+    </nav>
+
+    <!-- Header Section -->
+    <header class="relative pt-24 pb-16 lg:pt-32 lg:pb-24 overflow-hidden bg-slate-900 text-white">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 relative z-10 text-center">
+            <img src="aastraa_wfh.png" onerror="this.src='https://theastravision.com/logo.png'" class="w-24 h-24 mx-auto mb-6 rounded-2xl shadow-xl object-cover bg-white p-2">
+            <h1 class="text-4xl md:text-5xl lg:text-6xl font-black mb-6">AASTRAA WFH Tracker</h1>
+            <p class="text-xl text-slate-300 max-w-3xl mx-auto mb-8">Advanced WFH tracker and monitoring desktop app for remote teams, ensuring productivity while respecting privacy.</p>
+            <div class="flex gap-4 justify-center">
+                <a href="index.html#contact" class="bg-primary-600 hover:bg-primary-700 text-white px-8 py-3.5 rounded-full font-medium transition-all shadow-lg text-lg">Start Free Trial</a>
+                <span class="bg-white/10 text-white px-8 py-3.5 rounded-full font-bold text-lg">₹2,999/mo (Includes 25 users. +₹100/user/mo after)</span>
+            </div>
+        </div>
+    </header>
+
+    <!-- Main Content -->
+    
+    <!-- Main Content -->
+    <main class="bg-white">
+        <!-- Hero Image Section -->
+        <section class="py-12 bg-slate-50 border-b border-slate-200">
+            <div class="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8">
+                <div class="relative rounded-3xl overflow-hidden shadow-2xl border border-slate-200">
+                    <img src="wfh_dashboard.png" alt="WFH Tracker Dashboard Mockup" class="w-full h-auto object-cover">
+                    <div class="absolute inset-0 bg-gradient-to-t from-slate-900/50 to-transparent pointer-events-none"></div>
+                </div>
+            </div>
+        </section>
+
+        <!-- Features Grid -->
+        <section class="py-24">
+            <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+                <div class="text-center max-w-3xl mx-auto mb-16">
+                    <div class="inline-block bg-primary-100 text-primary-700 px-4 py-1.5 rounded-full text-xs font-bold tracking-wide uppercase mb-4 shadow-sm">
+                        Enterprise Monitoring
+                    </div>
+                    <h2 class="text-3xl md:text-5xl font-bold text-slate-900 mb-6">Consent-Based Remote Monitoring</h2>
+                    <p class="text-lg text-slate-600 mb-8">The standalone WFH tracker provides manager visibility without compromising employee trust.</p>
+                </div>
+
+                <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-8">
+                    <!-- Feature 1 -->
+                    <div class="bg-slate-50 p-8 rounded-3xl border border-slate-200 hover:shadow-lg transition-all duration-300 hover:-translate-y-1">
+                        <div class="w-14 h-14 bg-white rounded-2xl shadow-sm border border-slate-100 flex items-center justify-center text-primary-600 text-2xl mb-6">
+                            <i class="fa-solid fa-desktop"></i>
+                        </div>
+                        <h3 class="text-xl font-bold text-slate-900 mb-3">Session Tracking</h3>
+                        <p class="text-slate-600 text-sm leading-relaxed">Logs active sessions and idle time with minute-by-minute accuracy across the entire shift.</p>
+                    </div>
+                    <!-- Feature 2 -->
+                    <div class="bg-slate-50 p-8 rounded-3xl border border-slate-200 hover:shadow-lg transition-all duration-300 hover:-translate-y-1">
+                        <div class="w-14 h-14 bg-white rounded-2xl shadow-sm border border-slate-100 flex items-center justify-center text-primary-600 text-2xl mb-6">
+                            <i class="fa-solid fa-eye-slash"></i>
+                        </div>
+                        <h3 class="text-xl font-bold text-slate-900 mb-3">Encrypted Blurring</h3>
+                        <p class="text-slate-600 text-sm leading-relaxed">Optionally takes encrypted desktop screenshots that are instantly blurred to protect sensitive data.</p>
+                    </div>
+                    <!-- Feature 3 -->
+                    <div class="bg-slate-50 p-8 rounded-3xl border border-slate-200 hover:shadow-lg transition-all duration-300 hover:-translate-y-1">
+                        <div class="w-14 h-14 bg-white rounded-2xl shadow-sm border border-slate-100 flex items-center justify-center text-primary-600 text-2xl mb-6">
+                            <i class="fa-solid fa-pause"></i>
+                        </div>
+                        <h3 class="text-xl font-bold text-slate-900 mb-3">Employee Controls</h3>
+                        <p class="text-slate-600 text-sm leading-relaxed">Employees can pause tracking instantly for personal privacy when on breaks or off the clock.</p>
+                    </div>
+                    <!-- Feature 4 -->
+                    <div class="bg-slate-50 p-8 rounded-3xl border border-slate-200 hover:shadow-lg transition-all duration-300 hover:-translate-y-1">
+                        <div class="w-14 h-14 bg-white rounded-2xl shadow-sm border border-slate-100 flex items-center justify-center text-primary-600 text-2xl mb-6">
+                            <i class="fa-solid fa-chart-pie"></i>
+                        </div>
+                        <h3 class="text-xl font-bold text-slate-900 mb-3">Manager Reports</h3>
+                        <p class="text-slate-600 text-sm leading-relaxed">Daily and weekly productivity digests sent directly to HR and department managers.</p>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- How It Works Section -->
+        <section class="py-24 bg-slate-900 text-white relative overflow-hidden">
+            <div class="absolute top-0 right-0 w-96 h-96 bg-primary-600/20 rounded-full blur-[100px] pointer-events-none"></div>
+            <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 relative z-10">
+                <div class="text-center mb-16">
+                    <h2 class="text-3xl md:text-4xl font-bold mb-4">How The Process Works</h2>
+                    <p class="text-slate-400">Seamless integration into your daily workflow.</p>
+                </div>
+                
+                <div class="grid grid-cols-1 md:grid-cols-3 gap-8 text-center relative">
+                    <!-- Connector line -->
+                    <div class="hidden md:block absolute top-12 left-[16%] right-[16%] h-0.5 bg-gradient-to-r from-primary-600/0 via-primary-600 to-primary-600/0 z-0"></div>
+                    
+                    <!-- Step 1 -->
+                    <div class="relative z-10 flex flex-col items-center">
+                        <div class="w-24 h-24 bg-slate-800 rounded-full border-4 border-primary-600 flex items-center justify-center text-3xl font-black mb-6 shadow-[0_0_30px_rgba(234,88,12,0.3)]">
+                            1
+                        </div>
+                        <h4 class="text-xl font-bold mb-2">Employee Logs In</h4>
+                        <p class="text-slate-400 text-sm">The lightweight desktop agent runs silently in the background, consuming minimal resources.</p>
+                    </div>
+                    
+                    <!-- Step 2 -->
+                    <div class="relative z-10 flex flex-col items-center">
+                        <div class="w-24 h-24 bg-slate-800 rounded-full border-4 border-primary-600 flex items-center justify-center text-3xl font-black mb-6 shadow-[0_0_30px_rgba(234,88,12,0.3)]">
+                            2
+                        </div>
+                        <h4 class="text-xl font-bold mb-2">Automated Tracking</h4>
+                        <p class="text-slate-400 text-sm">Activity vectors, keyboard/mouse telemetry, and application usage are logged securely.</p>
+                    </div>
+                    
+                    <!-- Step 3 -->
+                    <div class="relative z-10 flex flex-col items-center">
+                        <div class="w-24 h-24 bg-slate-800 rounded-full border-4 border-primary-600 flex items-center justify-center text-3xl font-black mb-6 shadow-[0_0_30px_rgba(234,88,12,0.3)]">
+                            3
+                        </div>
+                        <h4 class="text-xl font-bold mb-2">HR Dashboard</h4>
+                        <p class="text-slate-400 text-sm">Managers review aggregated productivity metrics to ensure SLA compliance for remote teams.</p>
+                    </div>
+                </div>
+            </div>
+        </section>
+    </main>
+
+
+    <!-- Footer -->
+    <footer class="bg-slate-950 text-white py-12 border-t border-slate-900 text-center">
+        <p class="text-slate-400 text-sm">&copy; 2026 TheAstravision. All rights reserved.</p>
+    </footer>
+
+</body>
+</html>

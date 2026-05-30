@@ -12,6 +12,7 @@ import { unwrapList } from '@/lib/hrmsApi';
 import { useAuthReady } from '@/lib/AuthProvider';
 import { parseApiError } from '@/lib/parseApiError';
 import { AxiosError } from 'axios';
+import { SampleFileDownload } from '@/components/common/SampleFileDownload';
 import { FormModal, FormField } from './FormModal';
 import { ConfirmDeleteModal } from './ConfirmDeleteModal';
 
@@ -30,6 +31,7 @@ export type ResourcePageConfig = {
   formFields?: FormField[];
   readOnly?: boolean;
   searchPlaceholder?: string;
+  sampleDownload?: { href: string; label?: string; filename?: string };
 };
 
 export function ResourcePage({ config }: { config: ResourcePageConfig }) {
@@ -119,6 +121,15 @@ export function ResourcePage({ config }: { config: ResourcePageConfig }) {
         <div>
           <h1 className="text-2xl font-extrabold text-foreground">{config.title}</h1>
           {config.description && <p className="text-sm text-default-500 mt-1">{config.description}</p>}
+          {config.sampleDownload && (
+            <div className="mt-2">
+              <SampleFileDownload
+                href={config.sampleDownload.href}
+                filename={config.sampleDownload.filename}
+                label={config.sampleDownload.label}
+              />
+            </div>
+          )}
         </div>
         <div className="flex gap-2">
           <Button isIconOnly variant="flat" onPress={() => refetch()} isLoading={isFetching}>

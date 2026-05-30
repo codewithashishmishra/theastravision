@@ -1,10 +1,17 @@
+"""
+Platform-global IMAP polling for Super Admin cold email campaigns only.
+
+Uses a single EnvConfiguration IMAP mailbox (notifications@). Tenant recruitment
+does not use this inbox. UID cursor is scoped per mailbox account via mailbox_key.
+"""
+
 import email
-import imaplib
 from email.utils import parseaddr, parsedate_to_datetime
 
 from django.utils import timezone
 
-from core.models import EnvConfiguration
+from core.email.smtp_client import connect_imap, get_platform_imap_config
+from core.platform_email_env import imap_mailbox_key_from_config
 
 from .ai_service import classify_reply_snippet
 from .models import (
@@ -15,7 +22,7 @@ from .models import (
 
 
 def get_imap_config() -> dict:
-    return EnvConfiguration.get_cached_config('IMAP') or {}
+    return get_platform_imap_config()
 
 
 def _reply_status_from_classification(classification: str) -> str:
@@ -53,20 +60,16 @@ def poll_inbound_replies():
     if not host:
         return {'processed': 0, 'skipped': 'IMAP not configured'}
 
-    port = int(cfg.get('port', 993))
-    use_ssl = bool(cfg.get('use_ssl', True))
     user = cfg.get('user', '')
     password = cfg.get('password', '')
     folder = cfg.get('folder', 'INBOX')
 
-    if use_ssl:
-        conn = imaplib.IMAP4_SSL(host, port)
-    else:
-        conn = imaplib.IMAP4(host, port)
+    conn = connect_imap(cfg)
     conn.login(user, password)
     conn.select(folder)
 
-    state, _ = ColdCampaignImapState.objects.get_or_create(mailbox_key='default')
+    mailbox_key = imap_mailbox_key_from_config(cfg)
+    state, _ = ColdCampaignImapState.objects.get_or_create(mailbox_key=mailbox_key)
     last_uid = int(state.last_uid) if state.last_uid.isdigit() else 0
 
     status, data = conn.uid('search', None, 'ALL')

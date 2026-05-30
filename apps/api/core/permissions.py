@@ -41,6 +41,33 @@ class IsSuperAdmin(BasePermission):
 
 TENANT_IAM_ROLE_NAMES = ('Super Admin', 'Company Admin', 'IT Admin')
 
+TENANT_EMAIL_ROLE_NAMES = ('Super Admin', 'Company Admin', 'HR Admin')
+PLATFORM_HEALTH_ROLE_NAMES = ('Super Admin', 'IT Admin')
+
+
+class IsTenantEmailAdmin(BasePermission):
+    """Company Admin, HR Admin, or platform Super Admin for tenant email settings and logs."""
+
+    def has_permission(self, request, view):
+        if not request.user or not request.user.is_authenticated:
+            return False
+        if request.user.is_superuser:
+            return True
+        return request.user.role_mappings.filter(
+            role__name__in=TENANT_EMAIL_ROLE_NAMES
+        ).exists()
+
+
+class IsPlatformHealthAdmin(BasePermission):
+    def has_permission(self, request, view):
+        if not request.user or not request.user.is_authenticated:
+            return False
+        if request.user.is_superuser:
+            return True
+        return request.user.role_mappings.filter(
+            role__name__in=PLATFORM_HEALTH_ROLE_NAMES
+        ).exists()
+
 
 class IsTenantIamAdmin(BasePermission):
     """Platform or tenant IAM administrators."""

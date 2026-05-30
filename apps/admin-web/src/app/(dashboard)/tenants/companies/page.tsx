@@ -1,154 +1,163 @@
 'use client';
 
-import React, { useState, useMemo } from 'react';
-import { 
-  Table, TableHeader, TableColumn, TableBody, TableRow, TableCell, 
-  User, Chip, Button, Input, DropdownTrigger, Dropdown, DropdownMenu, 
-  DropdownItem, Pagination, Select, SelectItem, useDisclosure,
-  Modal, ModalContent, ModalHeader, ModalBody, ModalFooter, Spinner, Avatar
-} from "@nextui-org/react";
+import React, { useState, useMemo, useCallback } from 'react';
+import {
+  Table, TableHeader, TableColumn, TableBody, TableRow, TableCell,
+  User, Chip, Button, Input, DropdownTrigger, Dropdown, DropdownMenu,
+  DropdownItem, Select, SelectItem, useDisclosure,
+  Modal, ModalContent, ModalHeader, ModalBody, ModalFooter, Spinner,
+} from '@nextui-org/react';
 import { Plus, Search, MoreVertical, Edit, Trash2, Eye, Building2 } from 'lucide-react';
 import { useQuery, useMutation, useQueryClient, keepPreviousData } from '@tanstack/react-query';
-import { api } from '@/lib/api';
+import api from '@/lib/axios';
 import { motion } from 'framer-motion';
 
-const API_URL = 'http://127.0.0.1:8000/api/v1/company-profiles/';
+type Tenant = {
+  id: string;
+  name: string;
+  domain: string;
+  email_domain: string | null;
+  subscription_plan: string;
+  default_currency: string;
+  is_active: boolean;
+  enabled_jurisdictions: string[];
+};
 
 const columns = [
-  {name: "COMPANY", uid: "legal_name"},
-  {name: "REGISTRATION NO", uid: "registration_number"},
-  {name: "TAX ID", uid: "tax_id"},
-  {name: "ACTIONS", uid: "actions"},
+  { name: 'TENANT', uid: 'name' },
+  { name: 'DOMAIN', uid: 'domain' },
+  { name: 'PLAN', uid: 'subscription_plan' },
+  { name: 'STATUS', uid: 'is_active' },
+  { name: 'ACTIONS', uid: 'actions' },
 ];
 
 export default function AllCompaniesPage() {
   const queryClient = useQueryClient();
-  const [filterValue, setFilterValue] = useState("");
+  const [filterValue, setFilterValue] = useState('');
   const [page, setPage] = useState(1);
-  const [pageSize, setPageSize] = useState("10");
+  const [pageSize, setPageSize] = useState('10');
 
-  // Modal controls
-  const {isOpen, onOpen, onOpenChange} = useDisclosure();
-  const {isOpen: isDeleteOpen, onOpen: onDeleteOpen, onOpenChange: onDeleteOpenChange} = useDisclosure();
+  const { isOpen, onOpen, onOpenChange } = useDisclosure();
+  const { isOpen: isDeleteOpen, onOpen: onDeleteOpen, onOpenChange: onDeleteOpenChange } = useDisclosure();
   const [modalMode, setModalMode] = useState<'create' | 'edit' | 'view'>('create');
-  const [selectedCompany, setSelectedCompany] = useState<any>(null);
-  const [itemToDelete, setItemToDelete] = useState<any>(null);
+  const [selectedTenant, setSelectedTenant] = useState<Tenant | null>(null);
+  const [itemToDelete, setItemToDelete] = useState<Tenant | null>(null);
 
-  // Form State
   const [formData, setFormData] = useState({
-    legal_name: '',
-    registration_number: '',
-    tax_id: '',
-    website: '',
-    logo: ''
+    name: '',
+    domain: '',
+    email_domain: '',
+    subscription_plan: 'starter',
+    default_currency: 'INR',
+    is_active: true,
   });
 
-  // Query
   const { data, isLoading, isFetching } = useQuery({
-    queryKey: ['companies', page, pageSize, filterValue],
+    queryKey: ['tenants', page, pageSize, filterValue],
     placeholderData: keepPreviousData,
     queryFn: async () => {
-      const res = await api.get(API_URL, {
-        params: {
-          page: page,
-          page_size: pageSize,
-          search: filterValue
-        }
+      const res = await api.get('/tenants/', {
+        params: { page, page_size: pageSize, search: filterValue || undefined },
       });
-      return res.data;
-    }
+      return res.data as { count: number; results: Tenant[] };
+    },
   });
 
-  // Mutations
   const createMutation = useMutation({
-    mutationFn: (newCompany: any) => api.post(API_URL, newCompany),
+    mutationFn: (payload: Record<string, unknown>) => api.post('/tenants/', payload),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['companies'] });
-      onOpenChange(); // close
-    }
+      queryClient.invalidateQueries({ queryKey: ['tenants'] });
+      onOpenChange();
+    },
   });
 
   const updateMutation = useMutation({
-    mutationFn: (updatedCompany: any) => api.put(`${API_URL}${selectedCompany.id}/`, updatedCompany),
+    mutationFn: (payload: Record<string, unknown>) =>
+      api.patch(`/tenants/${selectedTenant!.id}/`, payload),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['companies'] });
-      onOpenChange(); // close
-    }
+      queryClient.invalidateQueries({ queryKey: ['tenants'] });
+      onOpenChange();
+    },
   });
 
   const deleteMutation = useMutation({
-    mutationFn: (id: string) => api.delete(`${API_URL}${id}/`),
+    mutationFn: (id: string) => api.delete(`/tenants/${id}/`),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['companies'] });
-    }
+      queryClient.invalidateQueries({ queryKey: ['tenants'] });
+    },
   });
 
-  const totalPages = React.useMemo(() => {
+  const totalPages = useMemo(() => {
     return data?.count ? Math.max(1, Math.ceil(Number(data.count) / Number(pageSize))) : 1;
   }, [data?.count, pageSize]);
 
-  const handleOpenModal = (mode: 'create' | 'edit' | 'view', company: any = null) => {
+  const handleOpenModal = (mode: 'create' | 'edit' | 'view', tenant: Tenant | null = null) => {
     setModalMode(mode);
-    setSelectedCompany(company);
-    if (company) {
+    setSelectedTenant(tenant);
+    if (tenant) {
       setFormData({
-        legal_name: company.legal_name || '',
-        registration_number: company.registration_number || '',
-        tax_id: company.tax_id || '',
-        website: company.website || '',
-        logo: company.logo || ''
+        name: tenant.name || '',
+        domain: tenant.domain || '',
+        email_domain: tenant.email_domain || '',
+        subscription_plan: tenant.subscription_plan || 'starter',
+        default_currency: tenant.default_currency || 'INR',
+        is_active: tenant.is_active,
       });
     } else {
-      setFormData({ legal_name: '', registration_number: '', tax_id: '', website: '', logo: '' });
+      setFormData({
+        name: '',
+        domain: '',
+        email_domain: '',
+        subscription_plan: 'starter',
+        default_currency: 'INR',
+        is_active: true,
+      });
     }
     onOpen();
   };
 
   const handleSave = () => {
+    const payload = {
+      ...formData,
+      enabled_jurisdictions: ['IN'],
+    };
     if (modalMode === 'create') {
-      createMutation.mutate(formData);
+      createMutation.mutate(payload);
     } else if (modalMode === 'edit') {
-      updateMutation.mutate(formData);
+      updateMutation.mutate(payload);
     }
   };
 
-  const renderCell = React.useCallback((company: any, columnKey: React.Key) => {
-    const cellValue = company[columnKey as keyof typeof company];
-
+  const renderCell = useCallback((tenant: Tenant, columnKey: React.Key) => {
     switch (columnKey) {
-      case "legal_name":
+      case 'name':
         return (
           <User
             avatarProps={{
-              radius: "lg", 
-              src: company.logo,
+              radius: 'lg',
               showFallback: true,
               fallback: <Building2 size={20} className="text-default-400" />,
-              className: "bg-default-200/50"
+              className: 'bg-default-200/50',
             }}
-            description={
-              company.website ? (
-                <a 
-                  href={company.website.startsWith('http') ? company.website : `https://${company.website}`} 
-                  target="_blank" 
-                  rel="noopener noreferrer"
-                  className="text-primary hover:underline hover:text-primary-500 transition-colors z-20 relative block mt-0.5"
-                  onClick={(e) => e.stopPropagation()}
-                >
-                  {company.website}
-                </a>
-              ) : (
-                <span className="text-default-500 mt-0.5 block">
-                  {company.registration_number || 'No additional info'}
-                </span>
-              )
-            }
-            name={cellValue}
-          >
-            {cellValue}
-          </User>
+            description={tenant.email_domain || tenant.domain}
+            name={tenant.name}
+          />
         );
-      case "actions":
+      case 'domain':
+        return tenant.domain || '—';
+      case 'subscription_plan':
+        return (
+          <Chip size="sm" variant="flat" color="primary" className="capitalize">
+            {tenant.subscription_plan}
+          </Chip>
+        );
+      case 'is_active':
+        return (
+          <Chip size="sm" color={tenant.is_active ? 'success' : 'default'} variant="flat">
+            {tenant.is_active ? 'Active' : 'Inactive'}
+          </Chip>
+        );
+      case 'actions':
         return (
           <div className="relative flex justify-end items-center gap-2">
             <Dropdown>
@@ -157,19 +166,19 @@ export default function AllCompaniesPage() {
                   <MoreVertical className="text-default-300" size={18} />
                 </Button>
               </DropdownTrigger>
-              <DropdownMenu aria-label="Company Actions">
-                <DropdownItem startContent={<Eye size={16} />} onClick={() => handleOpenModal('view', company)}>
+              <DropdownMenu aria-label="Tenant Actions">
+                <DropdownItem startContent={<Eye size={16} />} onPress={() => handleOpenModal('view', tenant)}>
                   View Details
                 </DropdownItem>
-                <DropdownItem startContent={<Edit size={16} />} onClick={() => handleOpenModal('edit', company)}>
-                  Edit Company
+                <DropdownItem startContent={<Edit size={16} />} onPress={() => handleOpenModal('edit', tenant)}>
+                  Edit Tenant
                 </DropdownItem>
-                <DropdownItem 
-                  className="text-danger" 
-                  color="danger" 
+                <DropdownItem
+                  className="text-danger"
+                  color="danger"
                   startContent={<Trash2 size={16} />}
-                  onClick={() => {
-                    setItemToDelete(company);
+                  onPress={() => {
+                    setItemToDelete(tenant);
                     onDeleteOpen();
                   }}
                 >
@@ -180,7 +189,7 @@ export default function AllCompaniesPage() {
           </div>
         );
       default:
-        return cellValue || '-';
+        return String(tenant[columnKey as keyof Tenant] ?? '—');
     }
   }, []);
 
@@ -191,12 +200,12 @@ export default function AllCompaniesPage() {
           <h1 className="text-2xl font-extrabold text-foreground">All Companies</h1>
           <p className="text-sm text-default-500 mt-1">Manage all tenant organizations on the platform.</p>
         </div>
-        <Button color="primary" endContent={<Plus size={18} />} className="font-bold shadow-lg shadow-primary/30" onClick={() => handleOpenModal('create')}>
-          Add New Company
+        <Button color="primary" endContent={<Plus size={18} />} className="font-bold shadow-lg shadow-primary/30" onPress={() => handleOpenModal('create')}>
+          Add New Tenant
         </Button>
       </div>
 
-      <motion.div 
+      <motion.div
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.4 }}
@@ -206,30 +215,33 @@ export default function AllCompaniesPage() {
           <Input
             isClearable
             className="w-full sm:max-w-[44%]"
-            placeholder="Search by name or registration..."
+            placeholder="Search by name or domain..."
             startContent={<Search className="text-default-300" size={18} />}
             value={filterValue}
-            onClear={() => setFilterValue("")}
+            onClear={() => setFilterValue('')}
             onValueChange={(val) => {
               setFilterValue(val);
-              setPage(1); // reset to page 1 on search
+              setPage(1);
             }}
             variant="faded"
             radius="lg"
           />
           <div className="flex items-center gap-3">
             <span className="text-sm text-default-500">Rows per page:</span>
-            <Select 
-              className="w-24" 
-              size="sm" 
-              selectedKeys={[pageSize]} 
-              onChange={(e) => {
-                setPageSize(e.target.value);
-                setPage(1); // reset page when page size changes
+            <Select
+              className="w-24"
+              size="sm"
+              selectedKeys={[pageSize]}
+              onSelectionChange={(keys) => {
+                const val = Array.from(keys)[0] as string;
+                if (val) {
+                  setPageSize(val);
+                  setPage(1);
+                }
               }}
               variant="bordered"
             >
-              {['10', '20', '50', '100', '500'].map(size => (
+              {['10', '20', '50', '100'].map((size) => (
                 <SelectItem key={size} value={size}>{size}</SelectItem>
               ))}
             </Select>
@@ -237,40 +249,36 @@ export default function AllCompaniesPage() {
         </div>
 
         <div className="w-full overflow-x-auto custom-scrollbar pb-4">
-          <Table 
-            aria-label="Companies Table" 
+          <Table
+            aria-label="Tenants Table"
             shadow="none"
             isHeaderSticky
-            onRowAction={(key) => {
-              const company = data?.results.find((c: any) => c.id === key || c.id === Number(key));
-              if (company) handleOpenModal('view', company);
-            }}
             classNames={{
-              base: "max-h-[60vh] min-w-full",
-              wrapper: "p-0 border-none bg-transparent",
-              th: "bg-default-100/80 backdrop-blur-md text-default-700 font-extrabold tracking-wider z-10 py-4 uppercase text-xs",
-              td: "py-4 border-b border-default-100 font-medium",
-              tr: "hover:bg-primary/5 cursor-pointer transition-colors group"
+              base: 'max-h-[60vh] min-w-full',
+              wrapper: 'p-0 border-none bg-transparent',
+              th: 'bg-default-100/80 backdrop-blur-md text-default-700 font-extrabold tracking-wider z-10 py-4 uppercase text-xs',
+              td: 'py-4 border-b border-default-100 font-medium',
+              tr: 'hover:bg-primary/5 cursor-pointer transition-colors group',
             }}
           >
             <TableHeader columns={columns}>
               {(column) => (
-                <TableColumn key={column.uid} align={column.uid === "actions" ? "center" : "start"}>
+                <TableColumn key={column.uid} align={column.uid === 'actions' ? 'center' : 'start'}>
                   {column.name}
                 </TableColumn>
               )}
             </TableHeader>
-            <TableBody 
-              items={data?.results || []} 
+            <TableBody
+              items={data?.results || []}
               isLoading={isLoading || isFetching}
               loadingContent={
                 <div className="absolute inset-0 bg-background/40 backdrop-blur-sm flex items-center justify-center z-50 rounded-xl">
-                  <Spinner label="Loading Companies..." color="primary" size="lg" />
+                  <Spinner label="Loading tenants..." color="primary" size="lg" />
                 </div>
               }
-              emptyContent={isLoading ? " " : "No companies found"}
+              emptyContent={isLoading ? ' ' : 'No tenants found'}
             >
-              {(item: any) => (
+              {(item: Tenant) => (
                 <TableRow key={item.id}>
                   {(columnKey) => <TableCell>{renderCell(item, columnKey)}</TableCell>}
                 </TableRow>
@@ -281,128 +289,44 @@ export default function AllCompaniesPage() {
 
         <div className="flex w-full justify-between items-center mt-6 pt-4 border-t border-divider">
           <span className="text-small text-default-500 font-medium">
-            Total <span className="text-foreground font-bold">{data?.count || 0}</span> companies
+            Total <span className="text-foreground font-bold">{data?.count || 0}</span> tenants
           </span>
-          
           <div className="flex items-center gap-2">
-            <Button 
-              size="sm" 
-              variant="flat" 
-              color="primary"
-              isDisabled={page === 1} 
-              onPress={() => setPage(1)}
-            >
-              First
-            </Button>
-            <Button 
-              size="sm" 
-              variant="flat" 
-              color="primary"
-              isDisabled={page === 1} 
-              onPress={() => setPage(p => Math.max(1, p - 1))}
-            >
-              Prev
-            </Button>
-            
-            <span className="text-small font-semibold mx-2">
-              Page {page} of {totalPages}
-            </span>
-            
-            <Button 
-              size="sm" 
-              variant="flat" 
-              color="primary"
-              isDisabled={page === totalPages || totalPages === 0} 
-              onPress={() => setPage(p => Math.min(totalPages, p + 1))}
-            >
-              Next
-            </Button>
-            <Button 
-              size="sm" 
-              variant="flat" 
-              color="primary"
-              isDisabled={page === totalPages || totalPages === 0} 
-              onPress={() => setPage(totalPages)}
-            >
-              Last
-            </Button>
+            <Button size="sm" variant="flat" color="primary" isDisabled={page === 1} onPress={() => setPage(1)}>First</Button>
+            <Button size="sm" variant="flat" color="primary" isDisabled={page === 1} onPress={() => setPage((p) => Math.max(1, p - 1))}>Prev</Button>
+            <span className="text-small font-semibold mx-2">Page {page} of {totalPages}</span>
+            <Button size="sm" variant="flat" color="primary" isDisabled={page === totalPages || totalPages === 0} onPress={() => setPage((p) => Math.min(totalPages, p + 1))}>Next</Button>
+            <Button size="sm" variant="flat" color="primary" isDisabled={page === totalPages || totalPages === 0} onPress={() => setPage(totalPages)}>Last</Button>
           </div>
         </div>
       </motion.div>
 
-      {/* CRUD Modal */}
       <Modal isOpen={isOpen} onOpenChange={onOpenChange} size="2xl">
         <ModalContent>
           {(onClose) => (
             <>
               <ModalHeader className="flex flex-col gap-1">
-                {modalMode === 'create' && 'Add New Company'}
-                {modalMode === 'edit' && 'Edit Company'}
-                {modalMode === 'view' && 'Company Details'}
+                {modalMode === 'create' && 'Add New Tenant'}
+                {modalMode === 'edit' && 'Edit Tenant'}
+                {modalMode === 'view' && 'Tenant Details'}
               </ModalHeader>
               <ModalBody>
                 <div className="grid grid-cols-2 gap-4">
-                  <Input 
-                    label="Legal Name" 
-                    variant="bordered" 
-                    value={formData.legal_name} 
-                    onChange={(e) => setFormData({...formData, legal_name: e.target.value})}
-                    isReadOnly={modalMode === 'view'}
-                  />
-                  <Input 
-                    label="Registration Number" 
-                    variant="bordered" 
-                    value={formData.registration_number} 
-                    onChange={(e) => setFormData({...formData, registration_number: e.target.value})}
-                    isReadOnly={modalMode === 'view'}
-                  />
-                  <Input 
-                    label="Tax ID" 
-                    variant="bordered" 
-                    value={formData.tax_id} 
-                    onChange={(e) => setFormData({...formData, tax_id: e.target.value})}
-                    isReadOnly={modalMode === 'view'}
-                  />
-                  <Input 
-                    label="Website" 
-                    variant="bordered" 
-                    value={formData.website} 
-                    onChange={(e) => setFormData({...formData, website: e.target.value})}
-                    isReadOnly={modalMode === 'view'}
-                  />
-                  <div className="flex gap-4 items-center col-span-2">
-                    <Avatar 
-                      key={formData.logo || 'fallback'}
-                      radius="md"
-                      className="w-14 h-14 bg-default-200/50"
-                      src={formData.logo}
-                      showFallback
-                      fallback={<Building2 size={24} className="text-default-400" />}
-                    />
-                    <Input 
-                      label="Logo URL" 
-                      variant="bordered" 
-                      placeholder="https://..."
-                      value={formData.logo} 
-                      className="flex-1"
-                      onChange={(e) => setFormData({...formData, logo: e.target.value})}
-                      isReadOnly={modalMode === 'view'}
-                    />
-                  </div>
+                  <Input label="Name" variant="bordered" value={formData.name} onValueChange={(v) => setFormData({ ...formData, name: v })} isReadOnly={modalMode === 'view'} />
+                  <Input label="Domain" variant="bordered" value={formData.domain} onValueChange={(v) => setFormData({ ...formData, domain: v })} isReadOnly={modalMode === 'view'} />
+                  <Input label="Email Domain" variant="bordered" value={formData.email_domain} onValueChange={(v) => setFormData({ ...formData, email_domain: v })} isReadOnly={modalMode === 'view'} />
+                  <Select label="Plan" variant="bordered" selectedKeys={[formData.subscription_plan]} isDisabled={modalMode === 'view'} onSelectionChange={(keys) => { const v = Array.from(keys)[0] as string; if (v) setFormData({ ...formData, subscription_plan: v }); }}>
+                    <SelectItem key="starter">Starter</SelectItem>
+                    <SelectItem key="professional">Professional</SelectItem>
+                    <SelectItem key="enterprise">Enterprise</SelectItem>
+                  </Select>
+                  <Input label="Default Currency" variant="bordered" value={formData.default_currency} onValueChange={(v) => setFormData({ ...formData, default_currency: v })} isReadOnly={modalMode === 'view'} />
                 </div>
               </ModalBody>
               <ModalFooter>
-                <Button color="danger" variant="light" onPress={onClose}>
-                  {modalMode === 'view' ? 'Close' : 'Cancel'}
-                </Button>
+                <Button color="danger" variant="light" onPress={onClose}>{modalMode === 'view' ? 'Close' : 'Cancel'}</Button>
                 {modalMode !== 'view' && (
-                  <Button 
-                    color="primary" 
-                    onPress={handleSave} 
-                    isLoading={createMutation.isPending || updateMutation.isPending}
-                  >
-                    Save Changes
-                  </Button>
+                  <Button color="primary" onPress={handleSave} isLoading={createMutation.isPending || updateMutation.isPending}>Save Changes</Button>
                 )}
               </ModalFooter>
             </>
@@ -410,53 +334,24 @@ export default function AllCompaniesPage() {
         </ModalContent>
       </Modal>
 
-      {/* Delete Confirmation Modal */}
       <Modal isOpen={isDeleteOpen} onOpenChange={onDeleteOpenChange} size="md" backdrop="blur">
         <ModalContent>
           {(onClose) => (
             <>
               <ModalHeader className="flex flex-col gap-1 text-danger font-bold text-xl">Confirm Deletion</ModalHeader>
               <ModalBody>
-                <div className="flex flex-col gap-4 pb-2">
-                  <div className="w-16 h-16 rounded-full bg-danger/10 text-danger flex items-center justify-center mx-auto mb-2 animate-pulse">
-                    <Trash2 size={32} />
-                  </div>
-                  <p className="text-center font-extrabold text-lg text-foreground">Are you absolutely sure?</p>
-                  <p className="text-center text-default-500 text-sm leading-relaxed">
-                    You are about to permanently delete <strong className="text-foreground">{itemToDelete?.legal_name}</strong>. 
-                    This action cannot be undone and all associated data will be wiped entirely.
-                  </p>
-                  
-                  {/* Interactive Tip */}
-                  <div className="bg-warning/10 border border-warning/20 rounded-xl p-4 mt-2 flex gap-3 items-start shadow-inner">
-                    <span className="text-warning mt-0.5 text-lg">💡</span>
-                    <p className="text-xs text-warning-600 dark:text-warning-500 font-medium leading-relaxed">
-                      <strong>Pro Tip:</strong> Instead of deleting, consider editing the company profile and changing its status to "Inactive" to preserve historical records.
-                    </p>
-                  </div>
-                </div>
+                <p className="text-center text-default-500 text-sm">
+                  Delete tenant <strong>{itemToDelete?.name}</strong>? This cannot be undone.
+                </p>
               </ModalBody>
-              <ModalFooter className="flex justify-center gap-4 pb-6 pt-2">
-                <Button variant="flat" onPress={onClose} className="font-semibold w-24">
-                  Cancel
-                </Button>
-                <Button 
-                  color="danger" 
-                  className="font-bold w-24 shadow-lg shadow-danger/30"
-                  isLoading={deleteMutation.isPending}
-                  onPress={() => {
-                    deleteMutation.mutate(itemToDelete?.id);
-                    onClose();
-                  }}
-                >
-                  Delete
-                </Button>
+              <ModalFooter>
+                <Button variant="flat" onPress={onClose}>Cancel</Button>
+                <Button color="danger" isLoading={deleteMutation.isPending} onPress={() => { deleteMutation.mutate(itemToDelete!.id); onClose(); }}>Delete</Button>
               </ModalFooter>
             </>
           )}
         </ModalContent>
       </Modal>
-
     </div>
   );
 }

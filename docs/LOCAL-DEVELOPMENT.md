@@ -122,7 +122,8 @@ Also configure OpenAI under **Super Admin → Platform Config → AI** (model: `
 | **Answer scoring** | Django (`answer_scoring.py`) | Embedding similarity |
 | **HR reports** | Django (`report_builder.py`) | HTML template, no LLM |
 | **Questions + MCQ** | ai-service | **gpt-5.4-mini** |
-| **STT / TTS** | ai-service | OpenAI `whisper-1` + `tts-1` |
+| **STT / TTS (interview)** | voice-server (`apps/voice-server`) | Kokoro-82M + faster-whisper via `XYZ_AUDIO_*` |
+| **STT / TTS (ai-service fallback)** | ai-service | OpenAI `whisper-1` + `tts-1` |
 
 **One-time Argos Hindi model (Django API venv):**
 ```bash
@@ -131,6 +132,28 @@ argospm install translate-hi_en
 ```
 
 **First match/score request** downloads `all-MiniLM-L6-v2` (~90MB) via sentence-transformers.
+
+### GPU voice server (Kokoro + Whisper)
+
+For Astra live interview TTS/STT, run the voice server on a CUDA machine or Salad Cloud:
+
+```bash
+cd apps/voice-server
+cp .env.example .env   # OPENAI_API_KEY, VOICE_API_KEY
+docker build -t aastra-voice:local .
+docker run --gpus all -p 9001:9001 --env-file .env aastra-voice:local
+```
+
+In `apps/api/.env`:
+
+```env
+XYZ_AUDIO_WS_URL=ws://127.0.0.1:9001/ws/audio
+XYZ_AUDIO_API_KEY=same-as-VOICE_API_KEY-in-voice-server
+# Salad HTTPS gateway (optional; preferred over WebSocket on Salad):
+# XYZ_AUDIO_HTTP_BASE_URL=https://YOUR-GROUP.salad.cloud
+```
+
+See [apps/voice-server/README.md](../apps/voice-server/README.md) and [VOICE_TUNING.md](../apps/voice-server/VOICE_TUNING.md).
 
 Run **Celery worker + beat** for interview invite emails and report delivery.
 

@@ -19,6 +19,12 @@ def jd_upload_path(instance, filename):
     return f'recruitment/jd/{tenant_id}/{filename}'
 
 
+def bug_report_upload_path(instance, filename):
+    tenant_id = getattr(instance, 'tenant_id', None) or 'unknown'
+    session_id = getattr(instance, 'session_id', None) or 'unknown'
+    return f'interviews/{tenant_id}/{session_id}/bug-reports/{filename}'
+
+
 class JobRequisition(BaseTenantModel):
     STATUS_CHOICES = [
         ('Draft', 'Draft'),
@@ -63,6 +69,20 @@ class JobRequisition(BaseTenantModel):
     apply_deadline = models.DateField(null=True, blank=True)
     external_apply_url = models.URLField(max_length=500, null=True, blank=True)
     rich_description_html = models.TextField(blank=True, default='')
+    PARSE_PENDING = 'pending'
+    PARSE_PROCESSING = 'processing'
+    PARSE_READY = 'ready'
+    PARSE_FAILED = 'failed'
+    PARSE_STATUS_CHOICES = [
+        (PARSE_PENDING, 'Pending'),
+        (PARSE_PROCESSING, 'Processing'),
+        (PARSE_READY, 'Ready'),
+        (PARSE_FAILED, 'Failed'),
+    ]
+    jd_parse_status = models.CharField(
+        max_length=16, choices=PARSE_STATUS_CHOICES, default=PARSE_READY
+    )
+    jd_parse_error = models.CharField(max_length=500, blank=True, default='')
 
     class Meta:
         constraints = [
@@ -99,7 +119,113 @@ class TenantCareerPortalSettings(models.Model):
         return f"Career portal: {self.slug}"
 
 
+class RecruitmentCampaign(BaseTenantModel):
+    STATUS_DRAFT = 'draft'
+    STATUS_SENDING = 'sending'
+    STATUS_SENT = 'sent'
+    STATUS_PAUSED = 'paused'
+    STATUS_CHOICES = [
+        (STATUS_DRAFT, 'Draft'),
+        (STATUS_SENDING, 'Sending'),
+        (STATUS_SENT, 'Sent'),
+        (STATUS_PAUSED, 'Paused'),
+    ]
+
+    title = models.CharField(max_length=200)
+    job = models.OneToOneField(
+        JobRequisition, on_delete=models.CASCADE, related_name='recruitment_campaign'
+    )
+    status = models.CharField(max_length=32, choices=STATUS_CHOICES, default=STATUS_DRAFT)
+    outreach_subject = models.CharField(max_length=500, blank=True, default='')
+    outreach_body_html = models.TextField(blank=True, default='')
+    outreach_body_text = models.TextField(blank=True, default='')
+    send_rate_per_minute = models.PositiveIntegerField(default=10)
+    default_reporting_manager = models.ForeignKey(
+        Employee,
+        on_delete=models.PROTECT,
+        related_name='recruitment_campaigns',
+    )
+    created_by = models.ForeignKey(
+        'core.User',
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='recruitment_campaigns_created',
+    )
+
+    class Meta:
+        ordering = ['-created_at']
+
+    def __str__(self):
+        return f'{self.title} ({self.status})'
+
+
+class RecruitmentCampaignAttachment(BaseTenantModel):
+    KIND_JD_EXTRACT = 'jd_extract'
+    KIND_CHOICES = [
+        (KIND_JD_EXTRACT, 'JD Extract'),
+    ]
+
+    campaign = models.ForeignKey(
+        RecruitmentCampaign, on_delete=models.CASCADE, related_name='attachments'
+    )
+    kind = models.CharField(max_length=32, choices=KIND_CHOICES, default=KIND_JD_EXTRACT)
+    file_path = models.CharField(max_length=500, blank=True, default='')
+    extracted_text = models.TextField(blank=True, default='')
+
+    class Meta:
+        ordering = ['-created_at']
+        indexes = [models.Index(fields=['campaign', 'kind'])]
+
+    def __str__(self):
+        return f'Attachment {self.kind} for {self.campaign_id}'
+
+
+class RecruitmentCampaignQuestion(BaseTenantModel):
+    SOURCE_JD_BASELINE = 'jd_baseline'
+    SOURCE_CHOICES = [
+        (SOURCE_JD_BASELINE, 'JD Baseline'),
+    ]
+
+    campaign = models.ForeignKey(
+        RecruitmentCampaign, on_delete=models.CASCADE, related_name='campaign_questions'
+    )
+    order = models.PositiveIntegerField()
+    source = models.CharField(max_length=32, choices=SOURCE_CHOICES, default=SOURCE_JD_BASELINE)
+    difficulty_tier = models.CharField(max_length=32, blank=True, default='')
+    question_text = models.TextField()
+    ideal_answer = models.TextField()
+
+    class Meta:
+        ordering = ['order']
+        constraints = [
+            models.UniqueConstraint(
+                fields=['campaign', 'order', 'source'],
+                name='uniq_campaign_question_source_order',
+            )
+        ]
+        indexes = [models.Index(fields=['campaign', 'source', 'order'])]
+
+    def __str__(self):
+        return f'CampaignQ {self.order} for {self.campaign_id}'
+
+
 class Candidate(BaseTenantModel):
+    OUTREACH_PENDING = 'pending'
+    OUTREACH_SENT = 'sent'
+    OUTREACH_OPENED = 'opened'
+    OUTREACH_RESUME_UPLOADED = 'resume_uploaded'
+    OUTREACH_MATCHED = 'matched'
+    OUTREACH_COMPLETED = 'completed'
+    OUTREACH_STATUS_CHOICES = [
+        (OUTREACH_PENDING, 'Pending'),
+        (OUTREACH_SENT, 'Sent'),
+        (OUTREACH_OPENED, 'Opened'),
+        (OUTREACH_RESUME_UPLOADED, 'Resume uploaded'),
+        (OUTREACH_MATCHED, 'Matched'),
+        (OUTREACH_COMPLETED, 'Completed'),
+    ]
+
     STAGE_CHOICES = [
         ('Sourced', 'Sourced'),
         ('Screening', 'Screening'),
@@ -129,6 +255,24 @@ class Candidate(BaseTenantModel):
         related_name='proposed_hires',
         help_text='Future reporting manager after hire',
     )
+    campaign = models.ForeignKey(
+        RecruitmentCampaign,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='candidates',
+    )
+    portal_token = models.UUIDField(default=uuid.uuid4, editable=False, unique=True, db_index=True)
+    outreach_status = models.CharField(
+        max_length=32, choices=OUTREACH_STATUS_CHOICES, default=OUTREACH_PENDING
+    )
+    outreach_sent_at = models.DateTimeField(null=True, blank=True)
+    resume_parse_status = models.CharField(
+        max_length=16,
+        choices=JobRequisition.PARSE_STATUS_CHOICES,
+        default=JobRequisition.PARSE_READY,
+    )
+    resume_parse_error = models.CharField(max_length=500, blank=True, default='')
 
     def __str__(self):
         return f"{self.first_name} {self.last_name} - {self.job.title}"
@@ -175,6 +319,15 @@ class AiInterviewSession(BaseTenantModel):
     assessment_score = models.FloatField(null=True, blank=True)
     proctor_flags = models.JSONField(default=dict, blank=True)
     invite_sent_at = models.DateTimeField(null=True, blank=True)
+    include_assessment = models.BooleanField(
+        default=False,
+        help_text='HR opted in at invite time; assessment is not sent unless this is true.',
+    )
+    session_recording_path = models.CharField(max_length=500, blank=True, default='')
+    camera_recording_path = models.CharField(max_length=500, blank=True, default='')
+    recording_started_at = models.DateTimeField(null=True, blank=True)
+    recording_ended_at = models.DateTimeField(null=True, blank=True)
+    candidate_feedback = models.JSONField(default=dict, blank=True)
 
     def __str__(self):
         return f"AI Session: {self.candidate} ({self.status})"
@@ -190,6 +343,7 @@ class AiInterviewQuestion(BaseTenantModel):
     audio_path = models.CharField(max_length=500, blank=True, default='')
     score_percent = models.FloatField(null=True, blank=True)
     answered_at = models.DateTimeField(null=True, blank=True)
+    skipped = models.BooleanField(default=False)
 
     class Meta:
         ordering = ['order']
@@ -197,6 +351,124 @@ class AiInterviewQuestion(BaseTenantModel):
 
     def __str__(self):
         return f"Q{self.order} for {self.session_id}"
+
+
+class CandidatePrebakedQuestion(BaseTenantModel):
+    TIER_LOW = 'low'
+    TIER_MEDIUM = 'medium'
+    TIER_HARD = 'hard'
+    TIER_EXTREME_HARD = 'extreme_hard'
+    TIER_CHOICES = [
+        (TIER_LOW, 'Low'),
+        (TIER_MEDIUM, 'Medium'),
+        (TIER_HARD, 'Hard'),
+        (TIER_EXTREME_HARD, 'Extreme Hard'),
+    ]
+
+    candidate = models.ForeignKey(
+        Candidate, on_delete=models.CASCADE, related_name='prebaked_questions'
+    )
+    session = models.ForeignKey(
+        AiInterviewSession,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='prebaked_questions',
+    )
+    campaign = models.ForeignKey(
+        RecruitmentCampaign,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='candidate_prebaked_questions',
+    )
+    order = models.PositiveIntegerField()
+    difficulty_tier = models.CharField(max_length=32, choices=TIER_CHOICES)
+    question_text = models.TextField()
+    ideal_benchmarked_response = models.TextField()
+
+    class Meta:
+        ordering = ['order']
+        constraints = [
+            models.UniqueConstraint(
+                fields=['candidate', 'session', 'order'],
+                name='uniq_candidate_session_prebaked_order',
+            )
+        ]
+        indexes = [
+            models.Index(fields=['session', 'order']),
+            models.Index(fields=['candidate', 'created_at']),
+        ]
+
+    def __str__(self):
+        return f'Prebaked Q{self.order} for {self.candidate_id}'
+
+
+class CandidateLiveResponse(BaseTenantModel):
+    STATUS_ANSWERED = 'answered'
+    STATUS_SKIPPED = 'skipped'
+    STATUS_REPEATED = 'repeated'
+    STATUS_TIMEOUT = 'timeout'
+    STATUS_CHOICES = [
+        (STATUS_ANSWERED, 'Answered'),
+        (STATUS_SKIPPED, 'Skipped'),
+        (STATUS_REPEATED, 'Repeated'),
+        (STATUS_TIMEOUT, 'Timeout'),
+    ]
+
+    candidate = models.ForeignKey(
+        Candidate, on_delete=models.CASCADE, related_name='live_responses'
+    )
+    session = models.ForeignKey(
+        AiInterviewSession, on_delete=models.CASCADE, related_name='live_responses'
+    )
+    interview_question = models.ForeignKey(
+        AiInterviewQuestion,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='live_responses',
+    )
+    prebaked_question = models.ForeignKey(
+        CandidatePrebakedQuestion,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='live_responses',
+    )
+    question_order = models.PositiveIntegerField()
+    transcript_text = models.TextField(blank=True, default='')
+    status = models.CharField(max_length=16, choices=STATUS_CHOICES, default=STATUS_ANSWERED)
+    silence_seconds = models.PositiveIntegerField(default=0)
+    repeated_count = models.PositiveIntegerField(default=0)
+
+    class Meta:
+        ordering = ['question_order', 'created_at']
+        indexes = [
+            models.Index(fields=['session', 'question_order']),
+            models.Index(fields=['candidate', 'created_at']),
+        ]
+
+    def __str__(self):
+        return f'LiveResponse {self.question_order} ({self.status}) for {self.session_id}'
+
+
+class AiInterviewBugReport(BaseTenantModel):
+    session = models.ForeignKey(
+        AiInterviewSession, on_delete=models.CASCADE, related_name='bug_reports'
+    )
+    title = models.CharField(max_length=200)
+    description = models.TextField(blank=True, default='')
+    image = models.ImageField(upload_to=bug_report_upload_path, null=True, blank=True)
+
+    class Meta:
+        ordering = ['-created_at']
+        indexes = [
+            models.Index(fields=['session', 'created_at']),
+        ]
+
+    def __str__(self):
+        return f'BugReport {self.session_id} - {self.title[:40]}'
 
 
 class AssessmentTemplate(BaseTenantModel):
@@ -253,3 +525,99 @@ class AiInterviewReport(BaseTenantModel):
 
     def __str__(self):
         return f"Report for {self.session_id}"
+
+
+class TenantRecruitmentSettings(models.Model):
+    """Per-tenant recruitment / interview configuration."""
+
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    tenant = models.OneToOneField(
+        'core.Tenant', on_delete=models.CASCADE, related_name='recruitment_settings'
+    )
+    interview_recording_retention_days = models.PositiveIntegerField(default=15)
+    live_watch_enabled = models.BooleanField(default=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    def __str__(self):
+        return f"Recruitment settings: {self.tenant_id}"
+
+    @classmethod
+    def get_for_tenant(cls, tenant_id):
+        obj, _ = cls.objects.get_or_create(tenant_id=tenant_id)
+        return obj
+
+
+class AiInterviewMediaChunk(models.Model):
+    """Live upload chunks during an active interview session."""
+
+    KIND_SESSION_COMPOSITE = 'session_composite'
+    KIND_CAMERA = 'camera'
+    KIND_CHOICES = [
+        (KIND_SESSION_COMPOSITE, 'Session composite'),
+        (KIND_CAMERA, 'Camera'),
+    ]
+
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    session = models.ForeignKey(
+        AiInterviewSession, on_delete=models.CASCADE, related_name='media_chunks'
+    )
+    kind = models.CharField(max_length=32, choices=KIND_CHOICES)
+    sequence = models.PositiveIntegerField()
+    content_type = models.CharField(max_length=128, default='video/webm')
+    data = models.BinaryField()
+    byte_size = models.PositiveIntegerField(default=0)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['kind', 'sequence']
+        indexes = [
+            models.Index(fields=['session', 'kind', 'sequence']),
+        ]
+        constraints = [
+            models.UniqueConstraint(
+                fields=['session', 'kind', 'sequence'],
+                name='uniq_interview_chunk_seq',
+            ),
+        ]
+
+    def __str__(self):
+        return f"Chunk {self.kind}#{self.sequence} for {self.session_id}"
+
+
+class AiInterviewMediaBlob(models.Model):
+    """Finalized media artifacts stored in PostgreSQL until S3 is enabled."""
+
+    KIND_SESSION_COMPOSITE = 'session_composite'
+    KIND_CAMERA = 'camera'
+    KIND_ANSWER_AUDIO = 'answer_audio'
+    KIND_PROCTOR_IMAGE = 'proctor_image'
+    KIND_ASTRA_TTS = 'astra_tts'
+    KIND_CHOICES = [
+        (KIND_SESSION_COMPOSITE, 'Session composite'),
+        (KIND_CAMERA, 'Camera'),
+        (KIND_ANSWER_AUDIO, 'Answer audio'),
+        (KIND_PROCTOR_IMAGE, 'Proctor image'),
+        (KIND_ASTRA_TTS, 'Astra TTS utterance'),
+    ]
+
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    session = models.ForeignKey(
+        AiInterviewSession, on_delete=models.CASCADE, related_name='media_blobs'
+    )
+    kind = models.CharField(max_length=32, choices=KIND_CHOICES)
+    question_order = models.PositiveIntegerField(null=True, blank=True)
+    content_type = models.CharField(max_length=128, default='application/octet-stream')
+    data = models.BinaryField()
+    byte_size = models.PositiveIntegerField(default=0)
+    expires_at = models.DateTimeField(null=True, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['kind', 'question_order']
+        indexes = [
+            models.Index(fields=['session', 'kind']),
+        ]
+
+    def __str__(self):
+        return f"Blob {self.kind} for {self.session_id}"

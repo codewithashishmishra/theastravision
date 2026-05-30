@@ -29,6 +29,7 @@ from wfh.models import (
     WFHPolicy,
     WorkSession,
     WorkSessionEvent,
+    WorkSessionFocusEvent,
     WorkSessionHeartbeat,
 )
 from wfh.permissions import HasActiveApprovedWFH, HasActiveWorkSession, HasRecordedConsent, IsEmployeeUser
@@ -44,6 +45,7 @@ from wfh.serializers import (
     WorkSessionHistorySerializer,
 )
 from wfh.services.report import persist_session_report
+from wfh.services.productivity import classify_focus
 from wfh.services.session import finalize_session, get_active_session, get_approved_wfh_for_today
 from wfh.utils import audit_log, get_client_ip, get_employee_for_user
 
@@ -488,6 +490,27 @@ class ScreenshotUploadView(APIView):
             encrypted=True,
             encryption_algorithm=ALGORITHM,
             window_title=request.data.get("window_title", "")[:512],
+        )
+        app_name = (request.data.get("application_name") or "").strip()[:255]
+        tab_title = (request.data.get("active_tab_title") or "").strip()[:512]
+        focus_seconds = int(request.data.get("app_focus_seconds", 0) or 0)
+        is_productive, matched_rule = classify_focus(
+            tenant_id=employee.tenant_id,
+            app_name=app_name,
+            tab_title=tab_title,
+        )
+        WorkSessionFocusEvent.objects.create(
+            tenant=employee.tenant,
+            session=session,
+            employee=employee,
+            occurred_at=timezone.now(),
+            application_name=app_name,
+            active_tab_title=tab_title,
+            window_title=cap.window_title,
+            focus_seconds=max(0, focus_seconds),
+            is_productive=is_productive,
+            matched_rule=matched_rule,
+            screenshot=cap,
         )
         WorkSession.objects.filter(pk=session.pk).update(
             screenshot_count=session.screenshot_count + 1

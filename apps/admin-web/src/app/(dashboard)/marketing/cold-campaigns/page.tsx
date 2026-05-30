@@ -35,6 +35,7 @@ import {
   LibraryVariant,
   ThreadMessage,
 } from '@/lib/coldCampaignApi';
+import { SampleFileDownload } from '@/components/common/SampleFileDownload';
 import { formatRegionalDate, formatRegionalDateTime } from '@/lib/formatDateTime';
 import { sanitizeHtml } from '@/lib/sanitizeHtml';
 
@@ -69,7 +70,8 @@ export default function ColdCampaignsPage() {
   const [message, setMessage] = useState('');
   const [newName, setNewName] = useState('');
 
-  const wizardModal = useDisclosure();
+  const { isOpen: wizardOpen, onOpen: openWizard, onClose: closeWizard, onOpenChange: onWizardOpenChange } = useDisclosure();
+  const createModal = useDisclosure();
   const sendModal = useDisclosure();
   const previewModal = useDisclosure();
   const libraryModal = useDisclosure();
@@ -99,9 +101,10 @@ export default function ColdCampaignsPage() {
   }, []);
 
   const loadDetail = useCallback(async (id: string) => {
+    closeWizard();
     const res = await coldCampaignApi.get(id);
     setSelected(res.data);
-  }, []);
+  }, [closeWizard]);
 
   useEffect(() => {
     Promise.all([loadList(), loadThreads()]).finally(() => setLoading(false));
@@ -132,9 +135,9 @@ export default function ColdCampaignsPage() {
       setWizardCampaign(res.data);
       setSelected(res.data);
       setGeneratedBatch(null);
-      wizardModal.onOpen();
+      createModal.onClose();
       await refresh(res.data.id);
-      setMessage('Draft created. Generate email content in the wizard.');
+      setMessage('Draft created. Open Wizard to generate email content.');
     } catch (err) {
       setMessage(apiErrorDetail(err));
     } finally {
@@ -153,7 +156,7 @@ export default function ColdCampaignsPage() {
         : ['3', '7', '14'];
       setFollowupDays(days);
       setGeneratedBatch(null);
-      wizardModal.onOpen();
+      openWizard();
     } catch (err) {
       setMessage(apiErrorDetail(err));
     } finally {
@@ -270,8 +273,8 @@ export default function ColdCampaignsPage() {
     try {
       const detail = await coldCampaignApi.get(c.id);
       if (!detail.data.subject || !detail.data.body_html) {
-        setMessage('Set subject and body before sending (use wizard).');
-        await openWizardFor(c.id);
+        setMessage('Set subject and body before sending. Open Wizard to generate content.');
+        setSelected(detail.data);
         return;
       }
       if (detail.data.total_recipients === 0) {
@@ -341,7 +344,7 @@ export default function ColdCampaignsPage() {
   }
 
   return (
-    <div className="flex flex-col gap-6 max-w-6xl">
+    <div className="flex flex-col gap-6 w-full">
       <div>
         <h1 className="text-3xl font-extrabold">Cold Email Campaigns</h1>
         <p className="text-default-500 mt-1">
@@ -354,52 +357,15 @@ export default function ColdCampaignsPage() {
       </div>
 
       <Card className="border border-divider">
-        <CardBody className="gap-3 p-4">
-          <p className="font-semibold text-sm">New campaign</p>
-          <div className="flex flex-wrap gap-2 items-end">
-            <Input
-              className="max-w-xs"
-              placeholder="Campaign name"
-              value={newName}
-              onValueChange={setNewName}
-            />
-            <Select
-              label="Follow-ups"
-              className="max-w-[140px]"
-              selectedKeys={[followupCount]}
-              onSelectionChange={(k) => {
-                const v = Array.from(k)[0] as string;
-                setFollowupCount(v ?? '0');
-              }}
-            >
-              <SelectItem key="0">None</SelectItem>
-              <SelectItem key="1">1</SelectItem>
-              <SelectItem key="2">2</SelectItem>
-              <SelectItem key="3">3</SelectItem>
-            </Select>
-            {parseInt(followupCount, 10) > 0 &&
-              followupDays.slice(0, parseInt(followupCount, 10)).map((d, i) => (
-                <Input
-                  key={i}
-                  className="max-w-[100px]"
-                  type="number"
-                  label={`Day ${i + 1}`}
-                  value={d}
-                  onValueChange={(v) => {
-                    const next = [...followupDays];
-                    next[i] = v;
-                    setFollowupDays(next);
-                  }}
-                />
-              ))}
-            <Button color="primary" isLoading={busy} onPress={handleCreate}>
-              Create draft
-            </Button>
-          </div>
+        <CardBody className="gap-3 p-4 flex flex-row flex-wrap justify-between items-center">
+          <p className="font-semibold text-sm">Create a new outreach campaign</p>
+          <Button color="primary" onPress={createModal.onOpen}>
+            New Campaign
+          </Button>
         </CardBody>
       </Card>
 
-      <Table aria-label="Campaigns">
+      <Table aria-label="Campaigns" classNames={{ wrapper: 'w-full min-w-full', table: 'w-full' }}>
         <TableHeader>
           <TableColumn>Name</TableColumn>
           <TableColumn>Status</TableColumn>
@@ -589,9 +555,23 @@ export default function ColdCampaignsPage() {
                 size="sm"
                 color="secondary"
                 isDisabled={busy}
-                onPress={() =>
-                  runAction(() => coldCampaignApi.sendTest(selected.id), 'Test email sent.')
-                }
+                onPress={async () => {
+                  setBusy(true);
+                  setMessage('');
+                  try {
+                    await coldCampaignApi.sendTest(selected.id);
+                    setMessage('Test email sent.');
+                  } catch (err) {
+                    const detail = apiErrorDetail(err);
+                    setMessage(
+                      detail.toLowerCase().includes('smtp')
+                        ? `${detail} Save SMTP under Platform Config (/settings/global).`
+                        : detail,
+                    );
+                  } finally {
+                    setBusy(false);
+                  }
+                }}
               >
                 Send test to me
               </Button>
@@ -603,6 +583,11 @@ export default function ColdCampaignsPage() {
               >
                 Save
               </Button>
+              <SampleFileDownload
+                href="/samples/cold-campaign-recipients.csv"
+                filename="cold-campaign-recipients.csv"
+                label="Download sample CSV"
+              />
               <label>
                 <input
                   type="file"
@@ -674,7 +659,79 @@ export default function ColdCampaignsPage() {
         </p>
       )}
 
-      <Modal isOpen={wizardModal.isOpen} onOpenChange={wizardModal.onOpenChange} size="4xl" scrollBehavior="inside">
+      <Modal isOpen={createModal.isOpen} onOpenChange={createModal.onOpenChange} size="lg">
+        <ModalContent>
+          {(onClose) => (
+            <>
+              <ModalHeader>New Campaign</ModalHeader>
+              <ModalBody className="gap-6">
+                <div className="flex flex-col gap-4">
+                  <div className="flex gap-3 items-start">
+                    <div className="w-8 h-8 rounded-full bg-primary text-primary-foreground flex items-center justify-center text-sm font-bold shrink-0">1</div>
+                    <Input
+                      className="flex-1"
+                      label="Campaign name"
+                      placeholder="e.g. Q2 Outreach"
+                      value={newName}
+                      onValueChange={setNewName}
+                    />
+                  </div>
+                  <div className="flex gap-3 items-start">
+                    <div className="w-8 h-8 rounded-full bg-primary text-primary-foreground flex items-center justify-center text-sm font-bold shrink-0">2</div>
+                    <Select
+                      label="Number of follow-ups"
+                      className="flex-1"
+                      selectedKeys={[followupCount]}
+                      onSelectionChange={(k) => {
+                        const v = Array.from(k)[0] as string;
+                        setFollowupCount(v ?? '0');
+                      }}
+                    >
+                      <SelectItem key="0">None</SelectItem>
+                      <SelectItem key="1">1 follow-up</SelectItem>
+                      <SelectItem key="2">2 follow-ups</SelectItem>
+                      <SelectItem key="3">3 follow-ups</SelectItem>
+                    </Select>
+                  </div>
+                  {parseInt(followupCount, 10) > 0 && (
+                    <div className="flex gap-3 items-start ml-11 flex-col border-l-2 border-primary/30 pl-4">
+                      <p className="text-sm font-semibold text-default-600">Follow-up schedule (days after initial send)</p>
+                      {followupDays.slice(0, parseInt(followupCount, 10)).map((d, i) => (
+                        <Input
+                          key={i}
+                          type="number"
+                          label={`Follow-up ${i + 1} delay (days)`}
+                          value={d}
+                          onValueChange={(v) => {
+                            const next = [...followupDays];
+                            next[i] = v;
+                            setFollowupDays(next);
+                          }}
+                        />
+                      ))}
+                    </div>
+                  )}
+                </div>
+              </ModalBody>
+              <ModalFooter>
+                <Button variant="light" onPress={onClose}>Cancel</Button>
+                <Button
+                  color="primary"
+                  isLoading={busy}
+                  onPress={async () => {
+                    await handleCreate();
+                    createModal.onClose();
+                  }}
+                >
+                  Create draft
+                </Button>
+              </ModalFooter>
+            </>
+          )}
+        </ModalContent>
+      </Modal>
+
+      <Modal isOpen={wizardOpen} onOpenChange={onWizardOpenChange} size="4xl" scrollBehavior="inside">
         <ModalContent>
           {(onClose) => (
             <>

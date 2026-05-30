@@ -6,9 +6,9 @@ from django.core.management.base import BaseCommand
 from django.db import transaction
 from faker import Faker
 
-from core.models import Role, Tenant, TenantAddon, User, UserRoleMapping
+from core.models import Role, Tenant, TenantAddon, TenantEmailSettings, User, UserRoleMapping
 from employees.models import Employee, EmployeeBank, EmployeeContact
-from organization.models import Branch, CompanyProfile, Department, Designation
+from organization.models import Branch, Department, Designation
 
 fake = Faker()
 
@@ -61,27 +61,37 @@ def email_for_role(role_name: str, email_domain: str) -> str:
 
 
 class Command(BaseCommand):
-    help = 'Seeds demo tenants, role users, and bulk sample companies for testing'
+    help = (
+        'Seeds demo tenants, role users, and bulk sample companies for testing. '
+        'Re-run to backfill branches and org structure on existing tenants.'
+    )
 
     @transaction.atomic
     def handle(self, *args, **kwargs):
         self.stdout.write('Starting database seed...')
         default_password = make_password('password123')
 
+        from organization.services.tenant_provisioning import provision_tenant_defaults
+
         primary = self._ensure_tenant(**PRIMARY_TENANT)
-        self._ensure_company_profile(primary)
         self._ensure_super_admin(primary.email_domain, default_password)
+        provision_tenant_defaults(primary)
+        self._seed_tenant_email_settings(primary)
         self._ensure_tenant_role_users(primary, TENANT_ROLES, default_password)
+        self._link_role_users_to_employees(primary)
         self._seed_job_portal(primary)
+        self._seed_demo_interview(primary)
 
         for sample in SAMPLE_TENANTS:
             tenant = self._ensure_tenant(**sample)
-            self._ensure_company_profile(tenant)
+            provision_tenant_defaults(tenant)
+            self._seed_tenant_email_settings(tenant)
             self._ensure_tenant_role_users(
                 tenant,
-                ['Employee', 'HR Admin'],
+                ['Employee', 'HR Admin', 'Manager'],
                 default_password,
             )
+            self._link_role_users_to_employees(tenant)
 
         self.stdout.write('Creating 100 bulk companies...')
         tenants = []
@@ -90,14 +100,15 @@ class Command(BaseCommand):
             company_name = f'{base_name} {i+1}'
             slug = company_name.lower().replace(' ', '-') + str(random.randint(100, 9999))
             email_domain = f'{slug}.com'
-            tenant = Tenant.objects.create(
+            tenant, created = Tenant.objects.get_or_create(
                 name=company_name,
-                domain=slug,
-                email_domain=email_domain,
+                defaults={'domain': slug, 'email_domain': email_domain},
             )
             tenants.append(tenant)
-            self._ensure_company_profile(tenant)
-            self._seed_org_structure(tenant)
+            if not created:
+                continue
+            provision_tenant_defaults(tenant)
+            self._seed_tenant_email_settings(tenant)
 
         self.stdout.write('Creating 500 employees across bulk tenants...')
         for tenant in tenants:
@@ -169,6 +180,24 @@ class Command(BaseCommand):
             )
         )
 
+    def _seed_tenant_email_settings(self, tenant):
+        from django.conf import settings
+
+        from_email = getattr(
+            settings,
+            'PLATFORM_DEFAULT_TENANT_FROM_EMAIL',
+            'notifications@theastravision.com',
+        )
+        TenantEmailSettings.objects.update_or_create(
+            tenant=tenant,
+            defaults={
+                'from_email': from_email,
+                'from_name': tenant.name,
+                'reply_to': from_email,
+                'notify_roles': ['Company Admin', 'HR Admin'],
+            },
+        )
+
     def _seed_job_portal(self, tenant):
         from django.utils import timezone
 
@@ -219,6 +248,96 @@ class Command(BaseCommand):
                 work_mode='Hybrid',
             )
 
+    def _seed_demo_interview(self, tenant):
+        """Ashish Mishra — Software Engineer AI interview link valid for 24h (demo)."""
+        from datetime import timedelta
+
+        from django.utils import timezone
+
+        from recruitment.models import AiInterviewSession, Candidate, JobRequisition
+        from recruitment.services import create_ai_session, get_magic_link
+
+        demo_expiry_minutes = 24 * 60
+        dept = Department.objects.filter(tenant=tenant).first()
+
+        job, _ = JobRequisition.objects.get_or_create(
+            tenant=tenant,
+            slug='software-engineer',
+            defaults={
+                'title': 'Software Engineer',
+                'department': dept,
+                'location': 'Bengaluru, India',
+                'description': (
+                    'Software Engineer role for demo AI interviews. '
+                    'Experience with Python, Django, React, and REST APIs.'
+                ),
+                'status': 'Open',
+                'is_published': True,
+                'published_at': timezone.now(),
+                'employment_type': 'Full-time',
+                'work_mode': 'Hybrid',
+                'interview_question_count': 5,
+            },
+        )
+
+        candidate, created = Candidate.objects.get_or_create(
+            tenant=tenant,
+            email='ashish.mishra@aastraa.com',
+            job=job,
+            defaults={
+                'first_name': 'Ashish',
+                'last_name': 'Mishra',
+                'phone': '+91-9876543210',
+                'stage': 'Interview',
+                'parsed_resume_text': (
+                    'Ashish Mishra — Software Engineer with 5+ years building web platforms '
+                    'using Django, React, and PostgreSQL.'
+                ),
+                'ai_match_score': 88,
+            },
+        )
+        if not created:
+            candidate.first_name = 'Ashish'
+            candidate.last_name = 'Mishra'
+            candidate.stage = 'Interview'
+            candidate.save(update_fields=['first_name', 'last_name', 'stage', 'updated_at'])
+
+        expires_at = timezone.now() + timedelta(minutes=demo_expiry_minutes)
+        session = (
+            candidate.ai_sessions.order_by('-created_at').first()
+        )
+        if session:
+            if session.status == 'expired':
+                session.status = 'pending'
+            session.expires_at = expires_at
+            session.save(update_fields=['status', 'expires_at', 'updated_at'])
+        else:
+            session = create_ai_session(
+                candidate,
+                expiry_minutes=demo_expiry_minutes,
+                include_assessment=False,
+            )
+
+        link = get_magic_link(session)
+        self.stdout.write(
+            self.style.SUCCESS(
+                f'Demo AI interview: Ashish Mishra — {job.title} | status={session.status} | '
+                f'expires_at={session.expires_at.isoformat()}'
+            )
+        )
+        self.stdout.write(self.style.WARNING(f'Interview join link: {link}'))
+
+        refreshed = AiInterviewSession.objects.filter(
+            tenant=tenant,
+            candidate__first_name='Ashish',
+            candidate__last_name='Mishra',
+            status='expired',
+        ).update(status='pending', expires_at=expires_at)
+        if refreshed:
+            self.stdout.write(
+                self.style.SUCCESS(f'Refreshed {refreshed} expired Ashish Mishra session(s).')
+            )
+
     def _ensure_tenant(self, name, domain, email_domain):
         tenant, created = Tenant.objects.get_or_create(
             domain=domain,
@@ -236,18 +355,6 @@ class Command(BaseCommand):
         if created:
             self.stdout.write(f'Created tenant: {name} ({email_domain})')
         return tenant
-
-    def _ensure_company_profile(self, tenant):
-        CompanyProfile.objects.get_or_create(
-            tenant=tenant,
-            defaults={
-                'legal_name': tenant.name,
-                'registration_number': f'REG-{fake.bothify(text="????-####").upper()}',
-                'tax_id': f'TAX-{fake.bothify(text="######")}',
-                'website': fake.url(),
-                'logo': f'https://ui-avatars.com/api/?name={tenant.name.replace(" ", "+")}',
-            },
-        )
 
     def _ensure_super_admin(self, email_domain, password):
         email = email_for_role('Super Admin', email_domain)
@@ -302,31 +409,45 @@ class Command(BaseCommand):
             )
             UserRoleMapping.objects.get_or_create(user=user, role=role)
 
-    def _seed_org_structure(self, tenant):
-        for suffix in ('01', '02'):
-            Branch.objects.get_or_create(
+    def _link_role_users_to_employees(self, tenant):
+        """Link seeded role users to Employee records so ESS/WFH/attendance APIs work."""
+        from datetime import date
+
+        from employees.services.employee_types import assign_default_employee_type, seed_employee_types_for_tenant
+
+        seed_employee_types_for_tenant(tenant.id)
+        branch = Branch.objects.filter(tenant=tenant).first()
+        department = Department.objects.filter(tenant=tenant).first()
+        designation = Designation.objects.filter(tenant=tenant).first()
+
+        link_roles = [
+            'Company Admin', 'HR Admin', 'Payroll Admin', 'Finance Admin',
+            'IT Admin', 'Manager', 'Recruiter', 'Interviewer', 'Auditor', 'Employee',
+        ]
+        for role_name in link_roles:
+            email = email_for_role(role_name, tenant.email_domain)
+            user = User.objects.filter(email=email, tenant=tenant).first()
+            employee_code = f'EMP-{role_email_local(role_name).upper()[:12]}'
+            if not user:
+                continue
+            if Employee.objects.filter(user=user).exists():
+                continue
+            if Employee.objects.filter(employee_code=employee_code).exists():
+                Employee.objects.filter(employee_code=employee_code).update(user=user)
+                continue
+            emp = Employee.objects.create(
                 tenant=tenant,
-                code=f'BR-{suffix}',
-                defaults={
-                    'name': fake.city() + ' Branch',
-                    'address': fake.address(),
-                    'city': fake.city(),
-                    'state': fake.state(),
-                    'country': fake.country(),
-                },
+                user=user,
+                employee_code=employee_code,
+                first_name=user.first_name or role_name.split()[0],
+                last_name=user.last_name or 'User',
+                date_of_joining=date.today(),
+                branch=branch,
+                department=department,
+                designation=designation,
+                status='Active',
             )
-        for dept_name in ['HR', 'Engineering', 'Sales', 'Marketing']:
-            Department.objects.get_or_create(
-                tenant=tenant,
-                code=dept_name[:3].upper(),
-                defaults={'name': dept_name},
-            )
-        for desig in ['Manager', 'Developer', 'Executive', 'Analyst']:
-            Designation.objects.get_or_create(
-                tenant=tenant,
-                code=desig[:3].upper(),
-                defaults={'name': desig},
-            )
+            assign_default_employee_type(emp)
 
     def _assign_org_hierarchy(self, tenant):
         """Assign a simple reporting tree: manager@ as root, others report to root."""

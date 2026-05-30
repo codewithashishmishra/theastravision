@@ -59,7 +59,7 @@ export default function HRWFHRequestsPage() {
   const rows = tab === 'pending' ? pendingRows : allRows;
 
   return (
-    <div className="max-w-7xl mx-auto p-6 flex flex-col gap-6">
+    <div className="w-full p-6 flex flex-col gap-6">
       <h1 className="text-3xl font-extrabold">HR — WFH Requests</h1>
       {error && (
         <p className="text-danger text-sm bg-danger/10 border border-danger/30 rounded-lg px-4 py-3">{error}</p>

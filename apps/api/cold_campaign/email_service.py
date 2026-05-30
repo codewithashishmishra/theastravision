@@ -1,17 +1,18 @@
 from django.conf import settings
-from django.core.mail import EmailMultiAlternatives, get_connection
 
+from core.email.smtp_client import (
+    TRACKING_GIF_BYTES,
+    build_smtp_connection,
+    get_platform_smtp_config,
+    get_public_api_base_url,
+)
 from core.models import EnvConfiguration
 
 from .copy_templates import apply_merge_tags, html_to_plain
 
 
 def get_smtp_config() -> dict:
-    return EnvConfiguration.get_cached_config('SMTP') or {}
-
-
-def get_public_api_base_url() -> str:
-    return getattr(settings, 'PUBLIC_API_BASE_URL', 'http://127.0.0.1:8000').rstrip('/')
+    return get_platform_smtp_config()
 
 
 def tracking_pixel_html(tracking_token) -> str:
@@ -29,28 +30,6 @@ def inject_tracking_pixel(html: str, tracking_token) -> str:
         idx = lower.rfind('</body>')
         return html[:idx] + pixel + html[idx:]
     return html + pixel
-
-
-def build_smtp_connection():
-    cfg = get_smtp_config()
-    host = cfg.get('host', '')
-    if not host:
-        raise ValueError('SMTP is not configured. Save SMTP settings under Platform Config.')
-    port = int(cfg.get('port', 587))
-    use_tls = bool(cfg.get('use_tls', True))
-    use_ssl = bool(cfg.get('use_ssl', False))
-    user = cfg.get('user', '')
-    password = cfg.get('password', '')
-    return get_connection(
-        backend='django.core.mail.backends.smtp.EmailBackend',
-        host=host,
-        port=port,
-        username=user or None,
-        password=password or None,
-        use_tls=use_tls,
-        use_ssl=use_ssl,
-        fail_silently=False,
-    )
 
 
 def render_campaign_email(
@@ -92,13 +71,13 @@ def send_campaign_email(
     include_tracking: bool = True,
     is_followup: bool = False,
 ) -> None:
+    from core.email.outbound import send_tenant_email
+    from core.email.utils import resolve_platform_tenant_id
     from .models import ColdCampaignThreadMessage
 
-    cfg = get_smtp_config()
-    from_email = campaign.from_email or cfg.get('from_email') or cfg.get('user', '')
-    from_name = campaign.from_name or cfg.get('from_name', 'The Astra Vision')
-    if not from_email:
-        raise ValueError('From email is not configured.')
+    tenant_id = resolve_platform_tenant_id(campaign)
+    if not tenant_id:
+        raise ValueError('No tenant available for outbound email logging.')
 
     if hasattr(recipient, 'ensure_outbound_message_id'):
         msg_id = recipient.ensure_outbound_message_id()
@@ -110,24 +89,21 @@ def send_campaign_email(
     subject, body_html, body_text = render_campaign_email(
         campaign, recipient, include_tracking=include_tracking and not is_followup
     )
-    conn = connection or build_smtp_connection()
-    reply_to = cfg.get('from_email') or from_email
-    imap_cfg = EnvConfiguration.get_cached_config('IMAP') or {}
-    if imap_cfg.get('user'):
-        reply_to = imap_cfg.get('user')
-
-    msg = EmailMultiAlternatives(
+    extra_headers = {'Message-ID': msg_id} if msg_id else None
+    if connection:
+        # Legacy batch path: still log via hub without reusing external connection
+        pass
+    send_tenant_email(
+        tenant_id=tenant_id,
+        to=recipient.email,
         subject=subject,
-        body=body_text,
-        from_email=f'{from_name} <{from_email}>',
-        to=[recipient.email],
-        reply_to=[reply_to],
-        connection=conn,
+        body_html=body_html,
+        body_text=body_text,
+        source='cold_campaign',
+        source_id=str(campaign.id),
+        track_opens=False,
+        extra_headers=extra_headers,
     )
-    msg.attach_alternative(body_html, 'text/html')
-    if msg_id:
-        msg.extra_headers['Message-ID'] = msg_id
-    msg.send()
 
     if getattr(recipient, 'pk', None):
         from django.utils import timezone
@@ -140,10 +116,3 @@ def send_campaign_email(
             received_at=timezone.now(),
             classification='followup' if is_followup else 'initial',
         )
-
-
-# 1x1 transparent GIF
-TRACKING_GIF_BYTES = (
-    b'GIF89a\x01\x00\x01\x00\x80\x00\x00\xff\xff\xff\x00\x00\x00!\xf9\x04\x01\x00\x00\x00\x00'
-    b',\x00\x00\x00\x00\x01\x00\x01\x00\x00\x02\x02D\x01\x00;'
-)

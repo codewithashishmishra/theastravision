@@ -11,8 +11,9 @@
 | HR report | Django `report_builder.py` — template |
 | Interview questions + ideal answers | ai-service — **gpt-5.4-mini** |
 | MCQ assessment generation | ai-service — **gpt-5.4-mini** |
-| STT | ai-service — OpenAI `whisper-1` |
-| TTS (Astra) | ai-service — OpenAI `tts-1` |
+| STT (live interview) | voice-server — faster-whisper via `XYZ_AUDIO_*` |
+| TTS (Astra) | voice-server — Kokoro-82M via `XYZ_AUDIO_*` |
+| STT / TTS (fallback) | ai-service — OpenAI `whisper-1` / `tts-1` |
 
 ## Backend Models
 

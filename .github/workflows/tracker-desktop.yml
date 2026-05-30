@@ -20,6 +20,9 @@ jobs:
       - name: Install dependencies
         run: |
           pip install -r apps/tracker-desktop/requirements.txt pyinstaller
+      - name: Smoke test imports
+        working-directory: apps/tracker-desktop
+        run: python -m compileall main.py core ui
       - name: Build executable
         working-directory: apps/tracker-desktop
         run: pyinstaller --onefile --windowed --name AastraaTracker main.py

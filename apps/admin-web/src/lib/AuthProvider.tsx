@@ -2,13 +2,14 @@
 
 import React, { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
+import axios from 'axios';
 import type { Role } from '@/config/menuConfig';
 import {
   AuthMeResponse,
   bootstrapAuthSession,
-  clearAuthSession,
   loadAndPersistAuthSession,
 } from '@/lib/authSession';
+import { logout } from '@/lib/logout';
 import { getAccessToken } from '@/lib/tokenStore';
 import { parseUserRoles } from '@/lib/roleRouting';
 import { setDebugUserContext } from '@/lib/debugLogStore';
@@ -37,14 +38,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     if (!token) {
       const bootstrapped = await bootstrapAuthSession();
       if (!bootstrapped) {
-        clearAuthSession();
         setIsAuthenticated(false);
         setUser(null);
         setPrimaryRole('Employee');
         setRoles(['Employee']);
-        setDebugUserContext({ email: '', roles: [] });
         setIsAuthReady(true);
-        router.replace('/login');
+        await logout({ redirect: true });
         return false;
       }
       token = getAccessToken();
@@ -63,15 +62,18 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       setIsAuthenticated(true);
       setIsAuthReady(true);
       return true;
-    } catch {
-      clearAuthSession();
-      setIsAuthenticated(false);
-      setUser(null);
-      setPrimaryRole('Employee');
-      setRoles(['Employee']);
-      setDebugUserContext({ email: '', roles: [] });
+    } catch (err) {
+      const status = axios.isAxiosError(err) ? err.response?.status : undefined;
+      if (status === 401) {
+        setIsAuthenticated(false);
+        setUser(null);
+        setPrimaryRole('Employee');
+        setRoles(['Employee']);
+        setIsAuthReady(true);
+        await logout({ redirect: true });
+        return false;
+      }
       setIsAuthReady(true);
-      router.replace('/login');
       return false;
     }
   }, [router]);

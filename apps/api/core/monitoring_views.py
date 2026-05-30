@@ -35,6 +35,30 @@ def _is_it_admin(user):
     return "IT Admin" in get_user_role_names(user)
 
 
+def _map_audit_row_to_log_entry(row: dict) -> dict:
+    """Normalize Postgres audit rows to SystemLogEntry shape for the log explorer UI."""
+    created = row.get('created_at') or row.get('timestamp') or ''
+    action = row.get('action', '')
+    module = row.get('module', 'audit')
+    user_email = row.get('user_email', '')
+    status_code = row.get('status_code') or row.get('status') or 200
+    try:
+        level = 'ERROR' if int(status_code) >= 400 else 'INFO'
+    except (TypeError, ValueError):
+        level = 'INFO'
+    metadata = row.get('metadata')
+    if not isinstance(metadata, dict):
+        metadata = {}
+    return {
+        'timestamp': str(created),
+        'level': level,
+        'service': str(module),
+        'message': f'{action} {user_email}'.strip() or str(action),
+        'raw': str(row),
+        'metadata': metadata,
+    }
+
+
 class PlatformStatusView(APIView):
     """Cooldown and utilization snapshot for all authenticated clients."""
 
@@ -194,7 +218,8 @@ class PlatformSystemLogsView(APIView):
                 return Response({"results": entries, "count": len(entries), "source": "clickhouse"})
 
             rows = fetch_logs_from_postgres(request, tenant_id=tenant_id, limit=limit)
-            return Response({"results": rows, "count": len(rows), "source": "postgres"})
+            mapped = [_map_audit_row_to_log_entry(r) for r in rows]
+            return Response({"results": mapped, "count": len(mapped), "source": "postgres"})
 
         source = get_log_source()
         entries = source.tail(service=service, since=since, limit=limit, level=level, search=search)

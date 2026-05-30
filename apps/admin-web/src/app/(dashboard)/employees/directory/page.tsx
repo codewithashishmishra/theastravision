@@ -13,6 +13,7 @@ import { useQuery, useMutation, useQueryClient, keepPreviousData } from '@tansta
 import api from '@/lib/axios';
 import { motion } from 'framer-motion';
 import { unwrapList } from '@/lib/hrmsApi';
+import { validateDateNotFuture, validateEmployeeCode, validateRequired } from '@/lib/validation';
 
 const API_URL = '/employees/employees/';
 
@@ -195,7 +196,17 @@ export default function EmployeeDirectoryPage() {
   };
 
   const handleSave = () => {
+    const codeErr = validateEmployeeCode(formData.employee_code);
+    const firstErr = validateRequired(formData.first_name, 'First name');
+    const lastErr = validateRequired(formData.last_name, 'Last name');
+    const joinErr = validateDateNotFuture(formData.date_of_joining, 'Date of joining');
+    const validationErr = codeErr || firstErr || lastErr || joinErr;
+    if (validationErr) {
+      setSaveError(validationErr);
+      return;
+    }
     if (!formData.employee_type) {
+      setSaveError('Employee type is required.');
       return;
     }
     if (tenantHasEmployees && !formData.reporting_manager && modalMode === 'create') {
@@ -492,12 +503,16 @@ export default function EmployeeDirectoryPage() {
                     value={formData.employee_code} 
                     onChange={(e) => setFormData({...formData, employee_code: e.target.value})}
                     isReadOnly={modalMode === 'view'}
+                    maxLength={32}
                   />
                   <Select 
                     label="Gender" 
                     variant="bordered" 
                     selectedKeys={[formData.gender]} 
-                    onChange={(e) => setFormData({...formData, gender: e.target.value})}
+                    onSelectionChange={(keys) => {
+                      const v = Array.from(keys)[0] as string;
+                      if (v) setFormData({...formData, gender: v});
+                    }}
                     isDisabled={modalMode === 'view'}
                   >
                     <SelectItem key="Male" value="Male">Male</SelectItem>
@@ -516,7 +531,10 @@ export default function EmployeeDirectoryPage() {
                     label="Status" 
                     variant="bordered" 
                     selectedKeys={[formData.status]} 
-                    onChange={(e) => setFormData({...formData, status: e.target.value})}
+                    onSelectionChange={(keys) => {
+                      const v = Array.from(keys)[0] as string;
+                      if (v) setFormData({...formData, status: v});
+                    }}
                     isDisabled={modalMode === 'view'}
                   >
                     <SelectItem key="Active" value="Active">Active</SelectItem>
@@ -535,7 +553,10 @@ export default function EmployeeDirectoryPage() {
                     label="Employee Type"
                     variant="bordered"
                     selectedKeys={formData.employee_type ? [String(formData.employee_type)] : []}
-                    onChange={(e) => setFormData({...formData, employee_type: e.target.value})}
+                    onSelectionChange={(keys) => {
+                      const v = Array.from(keys)[0] as string;
+                      if (v) setFormData({...formData, employee_type: v});
+                    }}
                     isDisabled={modalMode === 'view'}
                     isRequired
                   >
@@ -547,7 +568,10 @@ export default function EmployeeDirectoryPage() {
                     label="Branch"
                     variant="bordered"
                     selectedKeys={formData.branch ? [String(formData.branch)] : []}
-                    onChange={(e) => setFormData({...formData, branch: e.target.value})}
+                    onSelectionChange={(keys) => {
+                      const v = Array.from(keys)[0] as string;
+                      if (v) setFormData({...formData, branch: v});
+                    }}
                     isDisabled={modalMode === 'view'}
                   >
                     {branches.map((b: any) => (
@@ -579,9 +603,10 @@ export default function EmployeeDirectoryPage() {
                       selectedKeys={
                         formData.reporting_manager ? [String(formData.reporting_manager)] : []
                       }
-                      onChange={(e) =>
-                        setFormData({ ...formData, reporting_manager: e.target.value })
-                      }
+                      onSelectionChange={(keys) => {
+                        const v = Array.from(keys)[0] as string;
+                        setFormData({ ...formData, reporting_manager: v ?? '' });
+                      }}
                       isRequired={tenantHasEmployees}
                       className="col-span-2"
                     >

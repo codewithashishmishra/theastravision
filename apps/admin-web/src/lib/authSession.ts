@@ -31,8 +31,10 @@ export function persistAuthSession(user: AuthMeResponse): Role {
   const primary = getPrimaryRole(user.roles);
   localStorage.setItem('user_role', primary);
   localStorage.setItem('user_roles', JSON.stringify(user.roles));
-  localStorage.setItem('user_email', user.email);
-  localStorage.setItem('user_name', user.display_name || user.email);
+  if (typeof window !== 'undefined') {
+    sessionStorage.setItem('user_email', user.email);
+    sessionStorage.setItem('user_name', user.display_name || user.email);
+  }
   if (user.viewing_timezone) {
     setViewingTimezone(user.viewing_timezone);
   }
@@ -62,8 +64,8 @@ export function clearAuthSession(): void {
   resetE2EESession();
   localStorage.removeItem('user_role');
   localStorage.removeItem('user_roles');
-  localStorage.removeItem('user_email');
-  localStorage.removeItem('user_name');
+  sessionStorage.removeItem('user_email');
+  sessionStorage.removeItem('user_name');
   localStorage.removeItem('tenant_id');
   localStorage.removeItem('tenant_name');
   localStorage.removeItem('tenant_email_domain');
@@ -74,6 +76,16 @@ export function clearAuthSession(): void {
 }
 
 export async function bootstrapAuthSession(): Promise<boolean> {
+  const stored = typeof window !== 'undefined' ? sessionStorage.getItem('aastraa_access_token') : null;
+  if (stored) {
+    setAccessToken(stored);
+    try {
+      await loadAndPersistAuthSession();
+      return true;
+    } catch {
+      /* fall through to refresh */
+    }
+  }
   try {
     const res = await api.post('/auth/token/refresh/', {});
     const access = res.data.access ?? res.data.access_token;

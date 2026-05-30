@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import { Button, Input, Textarea } from '@nextui-org/react';
 import { wfhApi } from '@/lib/wfhApi';
+import { validateDateRange, validateRequired } from '@/lib/validation';
 
 type Props = {
   onSuccess?: () => void;
@@ -17,6 +18,15 @@ export default function WFHRequestForm({ onSuccess }: Props) {
 
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
+    const startErr = validateRequired(startDate, 'Start date');
+    const endErr = validateRequired(endDate, 'End date');
+    const reasonErr = validateRequired(reason, 'Reason');
+    const rangeErr = validateDateRange(startDate, endDate);
+    const first = startErr || endErr || reasonErr || rangeErr;
+    if (first) {
+      setError(first);
+      return;
+    }
     setLoading(true);
     setError('');
     try {

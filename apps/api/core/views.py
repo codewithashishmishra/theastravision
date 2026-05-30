@@ -1,4 +1,5 @@
 from rest_framework import viewsets, permissions
+from rest_framework.decorators import action
 from rest_framework.exceptions import ValidationError
 from rest_framework.views import APIView
 from rest_framework.response import Response
@@ -20,6 +21,12 @@ class TenantViewSet(AuditViewSetMixin, viewsets.ModelViewSet):
     serializer_class = TenantSerializer
     permission_classes = [IsSuperAdmin]
     audit_resource = "tenant"
+
+    def perform_create(self, serializer):
+        tenant = serializer.save()
+        from organization.services.tenant_provisioning import provision_tenant_defaults
+
+        provision_tenant_defaults(tenant)
 
 
 class BaseIamViewSet(AuditViewSetMixin, viewsets.ModelViewSet):
@@ -111,6 +118,36 @@ class EnvConfigurationViewSet(AuditViewSetMixin, viewsets.ModelViewSet):
     lookup_field = 'module'
     audit_module = "config"
     audit_resource = "env_config"
+
+    @action(detail=True, methods=['post'], url_path='test')
+    def test_connection(self, request, module=None):
+        from core.email.outbound import send_tenant_email
+        from core.email.smtp_client import test_imap_connection, test_smtp_connection
+        from core.models import Tenant
+        from core.tenant_utils import resolve_tenant_id
+
+        if module == 'SMTP':
+            to_email = request.data.get('to_email') or request.user.email
+            if not to_email:
+                return Response({'ok': False, 'detail': 'to_email required.'}, status=400)
+            result = test_smtp_connection(to_email)
+            if result.get('ok'):
+                tenant_id = resolve_tenant_id(request.user) or Tenant.objects.order_by('created_at').values_list('id', flat=True).first()
+                if tenant_id:
+                    send_tenant_email(
+                        tenant_id=tenant_id,
+                        to=to_email,
+                        subject='AastraaHR SMTP platform test',
+                        body_html='<p>SMTP platform configuration test succeeded.</p>',
+                        body_text='SMTP platform configuration test succeeded.',
+                        source='test',
+                        created_by=request.user,
+                    )
+            return Response(result)
+        if module == 'IMAP':
+            return Response(test_imap_connection())
+        return Response({'ok': False, 'detail': f'No test for module {module}.'}, status=400)
+
 
 class EnvFileView(APIView):
     permission_classes = [IsSuperAdmin]

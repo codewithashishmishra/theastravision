@@ -1,139 +1,296 @@
 'use client';
 
-import React, { useState, useEffect, useRef } from 'react';
-import { Card, CardBody, Button, Chip, Avatar, Progress } from '@nextui-org/react';
-import { Video, Mic, Share2, MessageSquare, Bot, User, Activity, AlertTriangle } from 'lucide-react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
+import { useParams, useRouter } from 'next/navigation';
+import {
+  Card,
+  CardBody,
+  Button,
+  Chip,
+  Avatar,
+  Spinner,
+  Modal,
+  ModalContent,
+  ModalHeader,
+  ModalBody,
+  ModalFooter,
+  Textarea,
+} from '@nextui-org/react';
+import {
+  MessageSquare,
+  Bot,
+  User,
+  Activity,
+  AlertTriangle,
+  Share2,
+  Mic,
+} from 'lucide-react';
+import { recruitmentApi } from '@/lib/hrmsApi';
+import { getAccessToken } from '@/lib/tokenStore';
+import { useInterviewLiveSocket } from '@/lib/useInterviewLiveSocket';
+import { useInterviewMsePlayer } from '@/lib/useInterviewMsePlayer';
 
-const MOCK_TRANSCRIPT = [
-  { sender: 'AI', text: "Hello Alice, welcome to your technical interview for the Senior Frontend Engineer role. I am Astra, your AI interviewer. Are you ready to begin?", time: "10:00 AM" },
-  { sender: 'Candidate', text: "Hi Astra, yes I am ready.", time: "10:00 AM" },
-  { sender: 'AI', text: "Great. Let's start with React. Can you explain the difference between Server Components and Client Components in Next.js 14?", time: "10:01 AM" },
-];
+type LiveSessionInfo = {
+  id: string;
+  status: string;
+  candidate_name: string;
+  job_title: string;
+  current_question_index: number;
+  current_question_text: string | null;
+  recording_started_at: string | null;
+  live_watch_enabled: boolean;
+};
 
 export default function AIInterviewLivePage() {
-  const [transcript, setTranscript] = useState(MOCK_TRANSCRIPT);
-  const [isLive, setIsLive] = useState(true);
+  const { id } = useParams<{ id: string }>();
+  const router = useRouter();
+  const [session, setSession] = useState<LiveSessionInfo | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
+  const [flagOpen, setFlagOpen] = useState(false);
+  const [flagNote, setFlagNote] = useState('');
+  const [terminating, setTerminating] = useState(false);
   const transcriptRef = useRef<HTMLDivElement>(null);
 
-  // Auto-scroll transcript
+  const token = typeof window !== 'undefined' ? getAccessToken() : null;
+  const { transcript, connected, lastChunk, sessionEnded, setTranscript } = useInterviewLiveSocket(
+    id,
+    token,
+    'hr',
+  );
+  const {
+    videoRef: screenVideoRef,
+    appendChunk,
+    latencyMs,
+    error: playerError,
+  } = useInterviewMsePlayer(id, 'session_composite');
+
+  const loadSession = useCallback(async () => {
+    if (!id) return;
+    setLoading(true);
+    try {
+      const res = await recruitmentApi.aiSessions.getLive(id);
+      setSession(res.data as LiveSessionInfo);
+      if (res.data.current_question_text) {
+        setTranscript([
+          {
+            sender: 'AI',
+            text: res.data.current_question_text,
+            time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+          },
+        ]);
+      }
+    } catch {
+      setError('Could not load live session.');
+    } finally {
+      setLoading(false);
+    }
+  }, [id, setTranscript]);
+
+  useEffect(() => {
+    void loadSession();
+  }, [loadSession]);
+
+  useEffect(() => {
+    if (lastChunk?.kind === 'session_composite') {
+      void appendChunk(lastChunk.sequence, lastChunk.created_at);
+    }
+  }, [lastChunk, appendChunk]);
+
   useEffect(() => {
     if (transcriptRef.current) {
       transcriptRef.current.scrollTop = transcriptRef.current.scrollHeight;
     }
   }, [transcript]);
 
-  // Simulate incoming live transcript
-  useEffect(() => {
-    if (!isLive) return;
-    const timer = setTimeout(() => {
-      setTranscript(prev => [...prev, {
-        sender: 'Candidate',
-        text: "Server components run exclusively on the server, which is great for fetching data securely and reducing bundle size. Client components run on the browser and are necessary when you need interactivity like onClick handlers or hooks like useState.",
-        time: "10:02 AM"
-      }]);
-    }, 5000);
+  const handleTerminate = async () => {
+    if (!id || !confirm('Terminate this interview session?')) return;
+    setTerminating(true);
+    try {
+      await recruitmentApi.aiSessions.terminate(id);
+      router.push('/recruitment/interviews');
+    } catch {
+      setError('Failed to terminate session.');
+    } finally {
+      setTerminating(false);
+    }
+  };
 
-    const aiTimer = setTimeout(() => {
-      setTranscript(prev => [...prev, {
-        sender: 'AI',
-        text: "Excellent explanation. That is highly accurate. Now, how would you handle a hydration mismatch error?",
-        time: "10:02 AM"
-      }]);
-    }, 12000);
+  const handleFlag = async () => {
+    if (!id) return;
+    try {
+      await recruitmentApi.aiSessions.flagConcern(id, flagNote || undefined);
+      setFlagOpen(false);
+      setFlagNote('');
+    } catch {
+      setError('Failed to flag concern.');
+    }
+  };
 
-    return () => { clearTimeout(timer); clearTimeout(aiTimer); };
-  }, [isLive]);
+  const isLive = session?.status === 'active' && !sessionEnded;
+
+  if (loading) {
+    return (
+      <div className="flex h-[60vh] items-center justify-center">
+        <Spinner size="lg" />
+      </div>
+    );
+  }
+
+  if (error || !session) {
+    return (
+      <div className="flex h-[60vh] flex-col items-center justify-center gap-4">
+        <p className="text-danger">{error || 'Session not found'}</p>
+        <Button onPress={() => router.push('/recruitment/interviews')}>Back</Button>
+      </div>
+    );
+  }
+
+  if (!session.live_watch_enabled) {
+    return (
+      <div className="flex h-[60vh] flex-col items-center justify-center gap-4">
+        <p className="text-default-500">Live watch is disabled for this organization.</p>
+        <Button onPress={() => router.push('/recruitment/interviews')}>Back</Button>
+      </div>
+    );
+  }
 
   return (
-    <div className="w-full flex flex-col gap-6 h-[85vh]">
-      
-      {/* Header */}
-      <div className="flex justify-between items-center bg-content1 p-4 rounded-3xl border border-divider shadow-sm shrink-0">
+    <div className="flex h-[85vh] w-full flex-col gap-6">
+      <div className="flex shrink-0 items-center justify-between rounded-3xl border border-divider bg-content1 p-4 shadow-sm">
         <div className="flex items-center gap-4">
           <div className="relative">
-            <Avatar src="https://i.pravatar.cc/150?u=a042581f4e29026024d" size="lg" className="ring-2 ring-primary/20" />
-            {isLive && <span className="absolute bottom-0 right-0 w-4 h-4 bg-danger rounded-full border-2 border-content1 animate-pulse" />}
+            <Avatar name={session.candidate_name} size="lg" className="ring-2 ring-primary/20" />
+            {isLive && (
+              <span className="absolute bottom-0 right-0 h-4 w-4 animate-pulse rounded-full border-2 border-content1 bg-danger" />
+            )}
           </div>
           <div>
-            <h1 className="text-xl font-extrabold text-foreground flex items-center gap-2">
-              Alice Cooper
-              <Chip size="sm" color="danger" variant="flat" className="animate-pulse font-bold ml-2">LIVE AI INTERVIEW</Chip>
+            <h1 className="flex items-center gap-2 text-xl font-extrabold text-foreground">
+              {session.candidate_name}
+              {isLive && (
+                <Chip size="sm" color="danger" variant="flat" className="ml-2 animate-pulse font-bold">
+                  LIVE AI INTERVIEW
+                </Chip>
+              )}
+              {!isLive && (
+                <Chip size="sm" variant="flat" color="default">
+                  {session.status}
+                </Chip>
+              )}
             </h1>
-            <p className="text-sm text-default-500 font-medium">Senior Frontend Engineer • Invited by: Recruiter</p>
+            <p className="text-sm font-medium text-default-500">
+              {session.job_title}
+              {connected ? ' • Connected' : ' • Reconnecting…'}
+            </p>
           </div>
         </div>
-        
         <div className="flex items-center gap-3">
-          <Button variant="flat" startContent={<AlertTriangle size={18} />} color="warning">
+          <Button
+            variant="flat"
+            startContent={<AlertTriangle size={18} />}
+            color="warning"
+            onPress={() => setFlagOpen(true)}
+            isDisabled={!isLive}
+          >
             Flag Concern
           </Button>
-          <Button color="danger" className="font-bold shadow-lg shadow-danger/30" onPress={() => setIsLive(false)}>
+          <Button
+            color="danger"
+            className="font-bold shadow-lg shadow-danger/30"
+            onPress={handleTerminate}
+            isLoading={terminating}
+            isDisabled={!isLive}
+          >
             Terminate Session
           </Button>
         </div>
       </div>
 
-      {/* Main Grid */}
-      <div className="flex gap-6 flex-1 overflow-hidden">
-        
-        {/* Left Col: Screen Share & Video */}
-        <div className="flex-[3] flex flex-col gap-6 min-w-[600px]">
-          
-          <Card className="flex-1 bg-black rounded-3xl overflow-hidden shadow-2xl relative border border-divider/20 group">
-            <div className="absolute inset-0 flex items-center justify-center">
-              {/* Simulated IDE Screen Share */}
-              <div className="w-full h-full bg-[#1e1e1e] p-6 font-mono text-sm text-green-400 overflow-hidden relative">
-                <div className="absolute top-0 left-0 w-full h-8 bg-[#2d2d2d] flex items-center px-4 border-b border-[#404040]">
-                  <Share2 size={14} className="text-default-400 mr-2" />
-                  <span className="text-default-300 text-xs">page.tsx - VS Code</span>
-                </div>
-                <div className="mt-10 opacity-80">
-                  <p>export default function DashboardLayout() {'{'}</p>
-                  <p className="pl-4 text-blue-400">const [mounted, setMounted] = useState(false);</p>
-                  <p className="pl-4 text-yellow-300 mt-2">{'// Waiting for candidate input...'}</p>
-                  <p>{'}'}</p>
-                  {isLive && <span className="w-2 h-4 bg-white inline-block animate-pulse mt-2 ml-4" />}
-                </div>
+      <div className="flex flex-1 gap-6 overflow-hidden">
+        <div className="flex min-w-[600px] flex-[3] flex-col gap-6">
+          <Card className="group relative flex-1 overflow-hidden rounded-3xl border border-divider/20 bg-black shadow-2xl">
+            <video
+              ref={screenVideoRef}
+              className="h-full w-full object-contain"
+              muted
+              playsInline
+              autoPlay
+            />
+            {!isLive && (
+              <div className="absolute inset-0 flex items-center justify-center bg-black/70 text-default-300">
+                Session not active
+              </div>
+            )}
+            {playerError && (
+              <div className="absolute bottom-4 left-4 rounded bg-danger/80 px-3 py-1 text-xs text-white">
+                {playerError}
+              </div>
+            )}
+            <div className="absolute bottom-6 left-6 z-10 flex aspect-video w-48 items-center justify-center overflow-hidden rounded-xl border-2 border-divider bg-content2 shadow-2xl">
+              <div className="flex flex-col items-center gap-2 text-default-400">
+                <User size={32} />
+                <span className="text-xs">Camera in composite</span>
+              </div>
+              <div className="absolute bottom-2 left-2 flex items-center gap-2 rounded bg-black/60 px-2 py-1 text-xs text-white backdrop-blur-md">
+                <Mic size={12} className="text-success" />
+                {session.candidate_name.split(' ')[0]}
               </div>
             </div>
-            
-            {/* Candidate PIP Video */}
-            <div className="absolute bottom-6 left-6 w-64 aspect-video bg-content2 rounded-xl overflow-hidden border-2 border-divider shadow-2xl group-hover:scale-105 transition-transform z-10">
-               <img src="https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?q=80&w=600&auto=format&fit=crop" alt="Candidate Feed" className="w-full h-full object-cover" />
-               <div className="absolute bottom-2 left-2 bg-black/60 px-2 py-1 rounded text-xs text-white flex items-center gap-2 backdrop-blur-md">
-                 <Mic size={12} className="text-success animate-pulse" />
-                 Alice Cooper
-               </div>
-            </div>
-
-            <div className="absolute top-6 right-6 flex gap-2">
-               <div className="bg-black/60 backdrop-blur-md px-3 py-1.5 rounded-lg text-xs font-bold text-white flex items-center gap-2">
-                 <Activity size={14} className="text-danger" /> 32ms Latency
-               </div>
+            <div className="absolute right-6 top-6 flex gap-2">
+              <div className="flex items-center gap-2 rounded-lg bg-black/60 px-3 py-1.5 text-xs font-bold text-white backdrop-blur-md">
+                <Activity size={14} className="text-danger" />
+                {latencyMs != null ? `${latencyMs}ms delay` : '—'}
+              </div>
+              <div className="flex items-center gap-2 rounded-lg bg-black/60 px-3 py-1.5 text-xs text-white backdrop-blur-md">
+                <Share2 size={14} />
+                Live
+              </div>
             </div>
           </Card>
         </div>
 
-        {/* Right Col: Live Transcript & AI Analysis */}
-        <div className="flex-[2] flex flex-col gap-6 min-w-[400px]">
-          
-          <Card className="flex-1 shadow-sm border border-divider flex flex-col">
-            <div className="p-4 border-b border-divider bg-default-50/50 flex justify-between items-center shrink-0">
-              <h3 className="font-bold flex items-center gap-2">
-                <MessageSquare size={18} className="text-primary"/> Live Transcript
+        <div className="flex min-w-[400px] flex-[2] flex-col gap-6">
+          <Card className="flex flex-1 flex-col border border-divider shadow-sm">
+            <div className="flex shrink-0 items-center justify-between border-b border-divider bg-default-50/50 p-4">
+              <h3 className="flex items-center gap-2 font-bold">
+                <MessageSquare size={18} className="text-primary" />
+                Live Transcript
               </h3>
-              <Chip size="sm" variant="flat" color="success">Recording Active</Chip>
+              <Chip size="sm" variant="flat" color={isLive ? 'success' : 'default'}>
+                {isLive ? 'Recording Active' : 'Ended'}
+              </Chip>
             </div>
-            
-            <CardBody className="p-6 flex flex-col gap-4 overflow-y-auto custom-scrollbar" ref={transcriptRef}>
+            <CardBody
+              className="custom-scrollbar flex flex-col gap-4 overflow-y-auto p-6"
+              ref={transcriptRef}
+            >
+              {transcript.length === 0 && (
+                <p className="text-center text-sm text-default-400">Waiting for conversation…</p>
+              )}
               {transcript.map((msg, i) => (
-                <div key={i} className={`flex gap-3 max-w-[90%] ${msg.sender === 'Candidate' ? 'ml-auto flex-row-reverse' : ''}`}>
-                  <div className={`w-8 h-8 rounded-full flex items-center justify-center shrink-0 ${msg.sender === 'AI' ? 'bg-primary/20 text-primary' : 'bg-success/20 text-success'}`}>
+                <div
+                  key={i}
+                  className={`flex max-w-[90%] gap-3 ${msg.sender === 'Candidate' ? 'ml-auto flex-row-reverse' : ''}`}
+                >
+                  <div
+                    className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-full ${
+                      msg.sender === 'AI' ? 'bg-primary/20 text-primary' : 'bg-success/20 text-success'
+                    }`}
+                  >
                     {msg.sender === 'AI' ? <Bot size={16} /> : <User size={16} />}
                   </div>
                   <div className={`flex flex-col ${msg.sender === 'Candidate' ? 'items-end' : ''}`}>
-                    <span className="text-[11px] text-default-400 font-medium mb-1 px-1">{msg.sender} • {msg.time}</span>
-                    <div className={`p-3 rounded-2xl text-[14px] leading-relaxed shadow-sm ${msg.sender === 'Candidate' ? 'bg-content2 text-foreground border border-divider' : 'bg-primary/10 text-primary-800 border border-primary/20'}`}>
+                    <span className="mb-1 px-1 text-[11px] font-medium text-default-400">
+                      {msg.sender} • {msg.time}
+                    </span>
+                    <div
+                      className={`rounded-2xl p-3 text-[14px] leading-relaxed shadow-sm ${
+                        msg.sender === 'Candidate'
+                          ? 'border border-divider bg-content2 text-foreground'
+                          : 'border border-primary/20 bg-primary/10 text-primary-800'
+                      }`}
+                    >
                       {msg.text}
                     </div>
                   </div>
@@ -141,34 +298,30 @@ export default function AIInterviewLivePage() {
               ))}
             </CardBody>
           </Card>
-
-          <Card className="shrink-0 shadow-sm border border-divider bg-content1">
-            <CardBody className="p-6">
-              <h3 className="font-bold mb-4 flex items-center gap-2">
-                <Bot size={18} className="text-secondary"/> Live AI Sentiment Analysis
-              </h3>
-              <div className="flex flex-col gap-4">
-                <div>
-                  <div className="flex justify-between text-xs font-bold text-default-600 mb-1">
-                    <span>Technical Accuracy Confidence</span>
-                    <span className="text-success">92%</span>
-                  </div>
-                  <Progress value={92} color="success" size="sm" />
-                </div>
-                <div>
-                  <div className="flex justify-between text-xs font-bold text-default-600 mb-1">
-                    <span>Communication Clarity</span>
-                    <span className="text-primary">85%</span>
-                  </div>
-                  <Progress value={85} color="primary" size="sm" />
-                </div>
-              </div>
-            </CardBody>
-          </Card>
-
         </div>
       </div>
 
+      <Modal isOpen={flagOpen} onOpenChange={setFlagOpen}>
+        <ModalContent>
+          <ModalHeader>Flag concern</ModalHeader>
+          <ModalBody>
+            <Textarea
+              label="Note"
+              placeholder="Describe the concern for HR review…"
+              value={flagNote}
+              onValueChange={setFlagNote}
+            />
+          </ModalBody>
+          <ModalFooter>
+            <Button variant="flat" onPress={() => setFlagOpen(false)}>
+              Cancel
+            </Button>
+            <Button color="warning" onPress={handleFlag}>
+              Submit
+            </Button>
+          </ModalFooter>
+        </ModalContent>
+      </Modal>
     </div>
   );
 }

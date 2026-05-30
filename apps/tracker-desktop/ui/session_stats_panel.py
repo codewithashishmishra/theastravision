@@ -1,8 +1,12 @@
+from datetime import datetime, timezone
+
 from PySide6.QtCore import Qt
 from PySide6.QtWidgets import (
     QFrame,
     QHeaderView,
+    QHBoxLayout,
     QLabel,
+    QPushButton,
     QTableWidget,
     QTableWidgetItem,
     QVBoxLayout,
@@ -15,13 +19,22 @@ class SessionStatsPanel(QWidget):
     def __init__(self, client: ApiClient):
         super().__init__()
         self.client = client
+        self._last_history_refresh_at = 0.0
         layout = QVBoxLayout(self)
         layout.setContentsMargins(12, 12, 12, 12)
         layout.setSpacing(10)
 
         title = QLabel("Recent Activity (30 Days)")
         title.setObjectName("heading")
-        layout.addWidget(title)
+        title_row = QHBoxLayout()
+        title_row.addWidget(title)
+        title_row.addStretch()
+        self.refresh_btn = QPushButton("Refresh")
+        self.refresh_btn.setObjectName("secondary")
+        self.refresh_btn.setMinimumWidth(90)
+        self.refresh_btn.clicked.connect(self.refresh_history)
+        title_row.addWidget(self.refresh_btn)
+        layout.addLayout(title_row)
 
         self.summary_label = QLabel("Start a work session to see live stats.")
         self.summary_label.setObjectName("subtitle")
@@ -51,6 +64,9 @@ class SessionStatsPanel(QWidget):
         self.refresh_history()
 
     def refresh_history(self):
+        import time
+
+        self._last_history_refresh_at = time.time()
         try:
             sessions = self.client.get("/sessions/history/")
             self.table.setRowCount(len(sessions))
@@ -71,22 +87,35 @@ class SessionStatsPanel(QWidget):
                 idle_s = int(sess.get("idle_duration") or 0)
                 paused_s = int(sess.get("paused_duration") or 0)
                 total_s = int(sess.get("total_duration") or 0)
-                if active_s == 0 and idle_s == 0 and paused_s == 0 and total_s > 0:
-                    active_s = total_s
+                if active_s == 0 and idle_s == 0 and paused_s == 0:
+                    if total_s > 0:
+                        active_s = total_s
+                    elif start_full:
+                        try:
+                            start_dt = datetime.fromisoformat(start_full.replace("Z", "+00:00"))
+                            if end_full:
+                                end_dt = datetime.fromisoformat(end_full.replace("Z", "+00:00"))
+                            else:
+                                end_dt = datetime.now(timezone.utc)
+                            elapsed = max(0, int((end_dt - start_dt).total_seconds()))
+                            active_s = elapsed
+                        except Exception:
+                            pass
 
-                def fmt(s):
+                def fmt_hhmmss(s):
                     h = s // 3600
                     m = (s % 3600) // 60
-                    return f"{h}h {m}m"
+                    sec = s % 60
+                    return f"{h:02d}:{m:02d}:{sec:02d}"
 
                 row_data = [
                     date_str,
                     task,
                     start_time_str,
                     end_time_str,
-                    fmt(active_s),
-                    fmt(idle_s),
-                    fmt(paused_s),
+                    fmt_hhmmss(active_s),
+                    fmt_hhmmss(idle_s),
+                    fmt_hhmmss(paused_s),
                     sess.get("status", "").capitalize(),
                     str(sess.get("screenshot_count", 0))
                 ]
@@ -113,6 +142,10 @@ class SessionStatsPanel(QWidget):
             f"Paused: {stats.format_hours(stats.paused_sec)} · "
             f"Spoof flags: {len(stats.spoof_flags)}"
         )
-        
-        # When stats update, also refresh the history table so the current session shows live
-        self.refresh_history()
+
+        # History refresh is throttled to avoid UI lag from network/table redraw every second.
+        import time
+
+        now = time.time()
+        if now - self._last_history_refresh_at >= 30:
+            self.refresh_history()

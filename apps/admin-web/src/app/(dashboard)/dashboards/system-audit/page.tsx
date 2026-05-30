@@ -4,20 +4,78 @@ import { useEffect, useState } from 'react';
 import { Card, CardBody, Button, ButtonGroup, Table, TableHeader, TableColumn, TableBody, TableRow, TableCell } from '@nextui-org/react';
 import Link from 'next/link';
 import { Activity, AlertTriangle, Clock, Server } from 'lucide-react';
+import axios from 'axios';
 import { auditApi } from '@/lib/auditApi';
 import { MetricsCharts } from '@/components/audit/MetricsCharts';
 import { ServiceStatusGrid } from '@/components/audit/ServiceStatusGrid';
+
+function apiErrorMessage(err: unknown): string {
+  if (axios.isAxiosError(err)) {
+    const detail = err.response?.data?.detail;
+    if (typeof detail === 'string') return detail;
+    if (err.response?.status === 403) return 'Super Admin access required.';
+    return err.message;
+  }
+  return 'Request failed.';
+}
 
 export default function SystemAuditDashboard() {
   const [range, setRange] = useState('1h');
   const [metrics, setMetrics] = useState<any>(null);
   const [services, setServices] = useState<any[]>([]);
   const [errorLogs, setErrorLogs] = useState<any[]>([]);
+  const [loadError, setLoadError] = useState<string | null>(null);
+  const [metricsHint, setMetricsHint] = useState<string | null>(null);
 
   useEffect(() => {
-    auditApi.platformMetrics(range).then((r) => setMetrics(r.data));
-    auditApi.platformServices().then((r) => setServices(r.data.services || []));
-    auditApi.systemLogs({ level: 'ERROR', since: '1 hour ago', limit: 50 }).then((r) => setErrorLogs(r.data.results || []));
+    let cancelled = false;
+    setLoadError(null);
+    setMetricsHint(null);
+
+    void Promise.allSettled([
+      auditApi.platformMetrics(range),
+      auditApi.platformServices(),
+      auditApi.systemLogs({ level: 'ERROR', since: '1 hour ago', limit: 50 }),
+    ]).then(([metricsResult, servicesResult, logsResult]) => {
+      if (cancelled) return;
+
+      const errors: string[] = [];
+
+      if (metricsResult.status === 'fulfilled') {
+        setMetrics(metricsResult.value.data);
+        const total = metricsResult.value.data?.summary?.total_requests ?? 0;
+        if (total === 0) {
+          setMetricsHint(
+            'No request metrics yet. Set METRICS_ENABLED=True in apps/api/.env, restart Django, then browse the app to populate charts.'
+          );
+        }
+      } else {
+        setMetrics(null);
+        errors.push(`Metrics: ${apiErrorMessage(metricsResult.reason)}`);
+      }
+
+      if (servicesResult.status === 'fulfilled') {
+        setServices(servicesResult.value.data.services || []);
+      } else {
+        setServices([]);
+        errors.push(`Services: ${apiErrorMessage(servicesResult.reason)}`);
+      }
+
+      if (logsResult.status === 'fulfilled') {
+        setErrorLogs(logsResult.value.data.results || []);
+      } else {
+        setErrorLogs([]);
+        errors.push(`Logs: ${apiErrorMessage(logsResult.reason)}`);
+      }
+
+      if (errors.length) {
+        setLoadError(errors.join(' '));
+      }
+    });
+
+    return () => {
+      cancelled = true;
+    };
   }, [range]);
 
   const summary = metrics?.summary;
@@ -35,6 +93,18 @@ export default function SystemAuditDashboard() {
           ))}
         </ButtonGroup>
       </div>
+
+      {loadError && (
+        <Card className="border border-danger shadow-sm">
+          <CardBody className="p-4 text-danger text-sm">{loadError}</CardBody>
+        </Card>
+      )}
+
+      {metricsHint && !loadError && (
+        <Card className="border border-warning shadow-sm">
+          <CardBody className="p-4 text-warning text-sm">{metricsHint}</CardBody>
+        </Card>
+      )}
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
         <Card className="border border-divider shadow-sm">

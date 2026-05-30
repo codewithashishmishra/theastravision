@@ -1,7 +1,9 @@
 from django.conf import settings
 from django.core.mail import EmailMultiAlternatives
 
+from core.email.outbound import send_tenant_email
 from cold_campaign.email_service import build_smtp_connection
+from recruitment.interview_email import render_invite_email
 
 
 def get_frontend_base_url() -> str:
@@ -11,25 +13,20 @@ def get_frontend_base_url() -> str:
 def send_interview_invite(session) -> None:
     candidate = session.candidate
     job = session.job
-    link = f"{get_frontend_base_url()}/interview/join/{session.magic_token}"
-    subject = f"AI Interview invitation — {job.title} at AastraaHR"
-    body_html = f"""
-    <p>Hello {candidate.first_name},</p>
-    <p>You have been invited to complete an AI voice interview with <strong>Astra</strong> for the role of <strong>{job.title}</strong>.</p>
-    <p>You may answer in English or Hindi; your responses are evaluated in English.</p>
-    <p><a href="{link}" style="background:#2563eb;color:#fff;padding:12px 20px;text-decoration:none;border-radius:6px;">Start interview</a></p>
-    <p>This link expires at {session.expires_at}.</p>
-  """
-    body_text = f"Hello {candidate.first_name},\n\nStart your interview: {link}\n"
-    msg = EmailMultiAlternatives(
+    subject, body_html, body_text = render_invite_email(session)
+    flags = session.proctor_flags or {}
+    cc = list(flags.get('cc_emails') or [])
+    tenant_id = candidate.tenant_id or job.tenant_id
+    send_tenant_email(
+        tenant_id=tenant_id,
+        to=candidate.email,
         subject=subject,
-        body=body_text,
-        from_email=getattr(settings, 'DEFAULT_FROM_EMAIL', 'noreply@aastraahr.com'),
-        to=[candidate.email],
-        connection=build_smtp_connection(),
+        body_html=body_html,
+        body_text=body_text,
+        source='interview_invite',
+        source_id=str(session.id),
+        cc=cc,
     )
-    msg.attach_alternative(body_html, 'text/html')
-    msg.send()
 
 
 def send_report_to_hr(session, report) -> None:

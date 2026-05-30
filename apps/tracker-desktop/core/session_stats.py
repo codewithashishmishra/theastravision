@@ -32,6 +32,7 @@ class SessionStats:
         self.paused_sec = 0
         self.spoof_flags: list[str] = []
         self._events: list[StatsEvent] = []
+        self._focus_segments: list[dict] = []
         self._state_started = datetime.now(timezone.utc)
         self._idle_tracking = False
 
@@ -74,6 +75,7 @@ class SessionStats:
         self.active_sec = self.idle_sec = self.paused_sec = 0
         self.spoof_flags = []
         self._events.clear()
+        self._focus_segments.clear()
         self._idle_tracking = False
         self._set_state(SessionState.ACTIVE)
         self._append("session_start", title, {"task_description": description})
@@ -111,6 +113,9 @@ class SessionStats:
         self._tick_state()
         self._append("session_stop", "Work session ended")
         self.state = SessionState.IDLE
+
+    def append_focus_segment(self, segment: dict):
+        self._focus_segments.append(segment)
 
     def tick(self):
         """Call periodically to advance duration counters."""
@@ -165,4 +170,5 @@ class SessionStats:
                 }
                 for ev in self._events
             ],
+            "focus_segments": list(self._focus_segments),
         }

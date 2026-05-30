@@ -85,6 +85,26 @@ export const notificationsApi = {
   unreadCount: () => api.get('/notifications/notifications/unread_count/'),
 };
 
+export const tenantEmailApi = {
+  get: () => api.get('/tenant-email-settings/'),
+  update: (data: Record<string, unknown>) => api.patch('/tenant-email-settings/', data),
+  testSend: (to_email?: string) =>
+    api.post('/tenant-email-settings/test-send/', to_email ? { to_email } : {}),
+};
+
+export const outboundEmailApi = {
+  list: (params?: Record<string, string>) => api.get('/outbound-email-logs/', { params }),
+  resend: (id: string) => api.post(`/outbound-email-logs/${id}/resend/`),
+  notify: (id: string) => api.post(`/outbound-email-logs/${id}/notify/`),
+};
+
+export const platformHealthApi = {
+  modules: () => api.get('/platform/health/modules/'),
+  testSmtp: (to_email: string) => api.post('/env-configs/SMTP/test/', { to_email }),
+  testImap: () => api.post('/env-configs/IMAP/test/'),
+  simulateImapPoll: () => api.post('/email/simulate/', { action: 'imap_poll' }),
+};
+
 export const attendanceApi = {
   logs: {
     list: (params?: Record<string, string>) => api.get('/attendance/logs/', { params }),
@@ -216,16 +236,45 @@ export const recruitmentApi = {
     regenerateKey: () => api.post('/recruitment/career-portal/settings/regenerate-key/'),
     embedSnippet: () => api.get('/recruitment/career-portal/settings/embed-snippet/'),
   },
+  campaigns: {
+    list: () => api.get('/recruitment/campaigns/'),
+    get: (id: string) => api.get(`/recruitment/campaigns/${id}/`),
+    create: (formData: FormData) =>
+      api.post('/recruitment/campaigns/', formData, { headers: { 'Content-Type': 'multipart/form-data' } }),
+    launch: (id: string) => api.post(`/recruitment/campaigns/${id}/launch/`),
+    generateCopy: (id: string) => api.post(`/recruitment/campaigns/${id}/generate-copy/`),
+  },
   candidates: {
-    list: () => api.get('/recruitment/candidates/'),
+    list: (params?: Record<string, string>) => api.get('/recruitment/candidates/', { params }),
     create: (formData: FormData) =>
       api.post('/recruitment/candidates/', formData, { headers: { 'Content-Type': 'multipart/form-data' } }),
     match: (id: string) => api.post(`/recruitment/candidates/${id}/match/`),
-    invite: (id: string, data?: { send_email?: boolean; expiry_minutes?: number }) =>
-      api.post(`/recruitment/candidates/${id}/invite/`, data ?? {}),
+    invite: (
+      id: string,
+      data?: {
+        send_email?: boolean;
+        expiry_minutes?: number;
+        scheduled_at?: string;
+        cc_hr_admin?: boolean;
+        cc_emails?: string[];
+        force?: boolean;
+        include_assessment?: boolean;
+      },
+    ) => api.post(`/recruitment/candidates/${id}/invite/`, data ?? {}),
   },
   interviews: { list: () => api.get('/recruitment/interviews/') },
-  aiSessions: { list: () => api.get('/recruitment/ai-sessions/') },
+  aiSessions: {
+    list: () => api.get('/recruitment/ai-sessions/'),
+    getLive: (id: string) => api.get(`/recruitment/ai-sessions/${id}/live/`),
+    terminate: (id: string) => api.post(`/recruitment/ai-sessions/${id}/terminate/`),
+    flagConcern: (id: string, note?: string) =>
+      api.post(`/recruitment/ai-sessions/${id}/flag-concern/`, { note }),
+  },
+  settings: {
+    get: () => api.get('/recruitment/settings/'),
+    update: (data: Record<string, unknown>) =>
+      api.patch('/recruitment/settings/update_settings/', data),
+  },
   aiReports: {
     list: () => api.get('/recruitment/ai-reports/'),
     get: (id: string) => api.get(`/recruitment/ai-reports/${id}/`),

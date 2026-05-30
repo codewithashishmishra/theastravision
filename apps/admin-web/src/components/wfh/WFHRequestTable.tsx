@@ -29,7 +29,10 @@ const statusColor = (s: string) => {
 
 export default function WFHRequestTable({ rows, showActions, onApprove, onReject, onCancel }: Props) {
   return (
-    <Table aria-label="WFH requests">
+    <Table
+      aria-label="WFH requests"
+      classNames={{ wrapper: 'w-full min-w-full', table: 'w-full' }}
+    >
       <TableHeader>
         <TableColumn>Employee</TableColumn>
         <TableColumn>Dates</TableColumn>

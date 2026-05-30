@@ -1,3 +1,6 @@
+import logging
+import smtplib
+
 from django.http import HttpResponse
 from django.utils import timezone
 from rest_framework import status, viewsets
@@ -6,6 +9,7 @@ from rest_framework.permissions import AllowAny
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
+from core.email.smtp_client import get_platform_smtp_config
 from core.permissions import IsSuperAdmin
 
 from .ai_service import generate_campaign_copy, generate_content_variants
@@ -33,6 +37,12 @@ from .serializers import (
 )
 from .tasks import dispatch_campaign_send, resume_campaign_send
 
+logger = logging.getLogger(__name__)
+
+_SMTP_CONFIG_HINT = (
+    'Update PLATFORM_SMTP_PASSWORD in apps/api/.env and run: python manage.py seed_env_config'
+)
+
 
 class ColdCampaignViewSet(viewsets.ModelViewSet):
     permission_classes = [IsSuperAdmin]
@@ -45,9 +55,6 @@ class ColdCampaignViewSet(viewsets.ModelViewSet):
         if self.action in ('create', 'update', 'partial_update'):
             return ColdCampaignWriteSerializer
         return ColdCampaignDetailSerializer
-
-    def perform_create(self, serializer):
-        serializer.save(created_by=self.request.user)
 
     @action(detail=False, methods=['get'], url_path='content-library')
     def content_library(self, request):
@@ -230,6 +237,24 @@ class ColdCampaignViewSet(viewsets.ModelViewSet):
         to_email = request.user.email
         if not to_email:
             return Response({'detail': 'Your user account has no email address.'}, status=400)
+
+        smtp_cfg = get_platform_smtp_config()
+        if not smtp_cfg.get('host'):
+            return Response(
+                {
+                    'detail': (
+                        'SMTP is not configured. Save SMTP settings under Platform Config '
+                        '(/settings/global) or set PLATFORM_SMTP_* in apps/api/.env.'
+                    ),
+                },
+                status=400,
+            )
+        if smtp_cfg.get('user') and not smtp_cfg.get('password'):
+            return Response(
+                {'detail': f'SMTP password is missing. {_SMTP_CONFIG_HINT}'},
+                status=400,
+            )
+
         recipient = ColdCampaignRecipient(
             email=to_email,
             first_name=request.user.first_name or 'there',
@@ -238,7 +263,17 @@ class ColdCampaignViewSet(viewsets.ModelViewSet):
         )
         try:
             send_campaign_email(campaign, recipient, include_tracking=False)
+        except ValueError as exc:
+            return Response({'detail': str(exc)}, status=400)
+        except smtplib.SMTPAuthenticationError:
+            return Response(
+                {'detail': f'SMTP authentication failed. {_SMTP_CONFIG_HINT}'},
+                status=400,
+            )
+        except smtplib.SMTPException as exc:
+            return Response({'detail': f'SMTP error: {exc}'}, status=400)
         except Exception as exc:
+            logger.exception('cold_campaign send_test failed')
             return Response({'detail': str(exc)}, status=500)
         return Response({'detail': f'Test email sent to {to_email}.'})
 

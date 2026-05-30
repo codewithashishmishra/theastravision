@@ -39,6 +39,15 @@ export const profileNavItem: MenuItem = {
   ],
 };
 
+/** Account settings — all authenticated roles (not platform config). */
+export const accountSettingsNavItem: MenuItem = {
+  key: 'account-settings',
+  label: 'Account Settings',
+  path: '/settings/account',
+  icon: Settings,
+  allowedRoles: ALL_ROLES,
+};
+
 export const menuConfig: MenuSection[] = [
   {
     section: 'Dashboards',
@@ -99,12 +108,13 @@ export const menuConfig: MenuSection[] = [
         children: [
           { key: 'roles-perms', label: 'Roles & Permissions', path: '/iam/roles', allowedRoles: ['Company Admin'] },
           { key: 'workflow-designer', label: 'Workflow Designer', path: '/settings/workflows', allowedRoles: ['Company Admin'] },
+          { key: 'tenant-email', label: 'Email Settings', path: '/settings/email', allowedRoles: ['Company Admin', 'HR Admin'] },
         ]
       },
       {
         key: 'company-policies', label: 'Company Policies', icon: FileText, allowedRoles: ['Company Admin'],
         children: [
-          { key: 'holiday-calendar', label: 'Holiday Calendar', path: '/policies/holidays', allowedRoles: ['Company Admin'] },
+          { key: 'holiday-calendar', label: 'Holiday Calendar', path: '/policies/holidays', allowedRoles: ['Company Admin', 'HR Admin'] },
           { key: 'general-policies', label: 'General Policies', path: '/policies/general', allowedRoles: ['Company Admin'] },
         ]
       },
@@ -146,6 +156,7 @@ export const menuConfig: MenuSection[] = [
           { key: 'hr-wfh-reports', label: 'WFH Reports', path: '/hr/wfh-reports', allowedRoles: ['HR Admin'] },
         ]
       },
+      { key: 'email-logs', label: 'Email Logs', path: '/hr/email-logs', icon: Mail, allowedRoles: ['Company Admin', 'HR Admin'] },
       {
         key: 'leave-management', label: 'Leave Management', icon: Calendar, allowedRoles: ['HR Admin'],
         children: [
@@ -342,13 +353,13 @@ export const menuConfig: MenuSection[] = [
         children: [
           { key: 'pipe-kanban', label: 'Kanban Board', path: '/recruitment/pipeline', allowedRoles: ['Recruiter'] },
           { key: 'pipe-ai', label: 'AI Match Scores', path: '/recruitment/ai-scores', allowedRoles: ['Recruiter'] },
-          { key: 'pipe-cand-new', label: 'Add Candidate (AI)', path: '/recruitment/candidates/new', allowedRoles: ['Recruiter'] },
+          { key: 'pipe-cand-new', label: 'Add Candidate (AI)', path: '/recruitment/candidates/new', allowedRoles: ['Recruiter', 'HR Admin', 'Company Admin'] },
         ]
       },
       {
-        key: 'ats-interviews', label: 'Interviews', icon: Calendar, allowedRoles: ['Recruiter', 'Interviewer'],
+        key: 'ats-interviews', label: 'Interviews', icon: Calendar, allowedRoles: ['Recruiter', 'Interviewer', 'HR Admin', 'Company Admin'],
         children: [
-          { key: 'int-sched', label: 'Scheduling', path: '/recruitment/interviews', allowedRoles: ['Recruiter', 'Interviewer'] },
+          { key: 'int-sched', label: 'Scheduling', path: '/recruitment/interviews', allowedRoles: ['Recruiter', 'Interviewer', 'HR Admin', 'Company Admin'] },
           { key: 'int-aireports', label: 'AI Interview Reports', path: '/recruitment/ai-interviews', allowedRoles: ['Recruiter', 'Interviewer'] },
           { key: 'int-assessments', label: 'Assessment Builder', path: '/recruitment/assessments', allowedRoles: ['Recruiter'] },
           { key: 'int-my', label: 'My Interviews', path: '/interviewer/upcoming', allowedRoles: ['Interviewer'] },
@@ -411,7 +422,6 @@ export const menuConfig: MenuSection[] = [
         key: 'ess-perf', label: 'Performance', icon: Target, allowedRoles: ['Employee'],
         children: [
           { key: 'perf-goals', label: 'My Goals', path: '/ess/performance/goals', allowedRoles: ['Employee'] },
-          { key: 'perf-app', label: 'Self-Appraisal', path: '/ess/performance/appraisal', allowedRoles: ['Employee'] },
         ]
       },
       {

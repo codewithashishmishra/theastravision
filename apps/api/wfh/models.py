@@ -232,10 +232,74 @@ class ActivitySummary(BaseTenantModel):
     active_seconds = models.PositiveIntegerField(default=0)
     idle_seconds = models.PositiveIntegerField(default=0)
     screenshot_count = models.PositiveIntegerField(default=0)
+    productive_seconds = models.PositiveIntegerField(default=0)
+    unproductive_seconds = models.PositiveIntegerField(default=0)
     productivity_score = models.FloatField(default=0.0)
 
     class Meta:
         unique_together = ("employee", "summary_date", "session")
+
+
+class ProductivityRule(BaseTenantModel):
+    MATCH_EXACT = "exact"
+    MATCH_REGEX = "regex"
+    TARGET_APP = "app"
+    TARGET_TAB = "tab"
+    TARGET_DOMAIN = "domain"
+    MATCH_CHOICES = [
+        (MATCH_EXACT, "Exact"),
+        (MATCH_REGEX, "Regex"),
+    ]
+    TARGET_CHOICES = [
+        (TARGET_APP, "Application"),
+        (TARGET_TAB, "Browser tab title"),
+        (TARGET_DOMAIN, "Domain"),
+    ]
+
+    name = models.CharField(max_length=120)
+    target_type = models.CharField(max_length=16, choices=TARGET_CHOICES, default=TARGET_APP)
+    match_type = models.CharField(max_length=16, choices=MATCH_CHOICES, default=MATCH_EXACT)
+    pattern = models.CharField(max_length=255)
+    is_productive = models.BooleanField(default=True)
+    is_active = models.BooleanField(default=True)
+
+    class Meta:
+        indexes = [
+            models.Index(fields=["tenant", "target_type", "is_active"]),
+            models.Index(fields=["tenant", "is_productive", "is_active"]),
+        ]
+
+
+class WorkSessionFocusEvent(BaseTenantModel):
+    session = models.ForeignKey(WorkSession, on_delete=models.CASCADE, related_name="focus_events")
+    employee = models.ForeignKey(Employee, on_delete=models.CASCADE)
+    occurred_at = models.DateTimeField(default=timezone.now)
+    application_name = models.CharField(max_length=255, blank=True)
+    active_tab_title = models.CharField(max_length=512, blank=True)
+    window_title = models.CharField(max_length=512, blank=True)
+    focus_seconds = models.PositiveIntegerField(default=0)
+    is_productive = models.BooleanField(default=False)
+    matched_rule = models.ForeignKey(
+        ProductivityRule,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="focus_events",
+    )
+    screenshot = models.ForeignKey(
+        ScreenshotCapture,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="focus_events",
+    )
+
+    class Meta:
+        indexes = [
+            models.Index(fields=["session", "occurred_at"]),
+            models.Index(fields=["tenant", "employee", "occurred_at"]),
+            models.Index(fields=["tenant", "is_productive", "occurred_at"]),
+        ]
 
 
 class TrackerAuditLog(models.Model):

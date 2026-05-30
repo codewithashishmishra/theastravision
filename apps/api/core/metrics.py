@@ -76,12 +76,27 @@ def get_summary_metrics(minutes=60):
     total_errors = 0
     by_status = {}
 
-    for i in range(minutes):
-        dt = now - timedelta(minutes=i)
-        key = _bucket_key(dt)
-        bucket = _read_bucket(key)
+    keys = [_bucket_key(now - timedelta(minutes=i)) for i in range(minutes)]
+    try:
+        client = _redis_client()
+        pipe = client.pipeline()
+        for key in keys:
+            pipe.hgetall(key)
+        raw_buckets = pipe.execute()
+    except redis.RedisError:
+        raw_buckets = [None] * len(keys)
+
+    for i, bucket in enumerate(raw_buckets):
         if not bucket:
             continue
+        dt = now - timedelta(minutes=i)
+        bucket = {
+            "requests": int(bucket.get("requests", 0)),
+            "errors": int(bucket.get("errors", 0)),
+            "latency_sum": float(bucket.get("latency_sum", 0)),
+            "latency_count": int(bucket.get("latency_count", 0)),
+            "by_status": {k.replace("status_", ""): int(v) for k, v in bucket.items() if k.startswith("status_")},
+        }
         total_requests += bucket["requests"]
         total_errors += bucket["errors"]
         if bucket["latency_count"]:
@@ -118,6 +133,32 @@ def get_time_series(range_key="1h"):
     step = 1 if minutes <= 120 else max(1, minutes // 120)
     now = timezone.now()
     series = []
+
+    all_keys = []
+    for i in range(0, minutes, step):
+        dt = now - timedelta(minutes=i)
+        for j in range(step):
+            k = _bucket_key(dt - timedelta(minutes=j))
+            all_keys.append(k)
+
+    bucket_map = {}
+    try:
+        client = _redis_client()
+        pipe = client.pipeline()
+        for k in all_keys:
+            pipe.hgetall(k)
+        results = pipe.execute()
+        for k, raw in zip(all_keys, results):
+            if raw:
+                bucket_map[k] = {
+                    "requests": int(raw.get("requests", 0)),
+                    "errors": int(raw.get("errors", 0)),
+                    "latency_sum": float(raw.get("latency_sum", 0)),
+                    "latency_count": int(raw.get("latency_count", 0)),
+                }
+    except redis.RedisError:
+        pass
+
     for i in range(0, minutes, step):
         dt = now - timedelta(minutes=i)
         agg_requests = 0
@@ -126,7 +167,7 @@ def get_time_series(range_key="1h"):
         agg_latency_count = 0
         for j in range(step):
             key = _bucket_key(dt - timedelta(minutes=j))
-            bucket = _read_bucket(key)
+            bucket = bucket_map.get(key)
             if not bucket:
                 continue
             agg_requests += bucket["requests"]

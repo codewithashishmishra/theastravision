@@ -9,7 +9,8 @@ import numpy as np
 import cv2
 try:
     import face_recognition
-except ImportError:
+except BaseException:
+    # face_recognition calls sys.exit() when face_recognition_models is missing
     face_recognition = None
 
 from .auth_views import _issue_login_response

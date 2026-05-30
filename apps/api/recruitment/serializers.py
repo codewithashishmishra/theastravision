@@ -1,6 +1,7 @@
 from rest_framework import serializers
 
 from .models import (
+    AiInterviewBugReport,
     AiInterviewQuestion,
     AiInterviewReport,
     AiInterviewSession,
@@ -11,8 +12,11 @@ from .models import (
     Interview,
     JobRequisition,
     ProctorSnapshot,
+    RecruitmentCampaign,
     TenantCareerPortalSettings,
+    TenantRecruitmentSettings,
 )
+from .campaign_services import campaign_stats
 from employees.models import Employee
 
 from .job_board_utils import sanitize_job_html
@@ -28,6 +32,19 @@ class JobRequisitionSerializer(serializers.ModelSerializer):
 
     def validate_rich_description_html(self, value):
         return sanitize_job_html(value or '')
+
+
+class TenantRecruitmentSettingsSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = TenantRecruitmentSettings
+        fields = [
+            'id',
+            'interview_recording_retention_days',
+            'live_watch_enabled',
+            'created_at',
+            'updated_at',
+        ]
+        read_only_fields = ('id', 'created_at', 'updated_at')
 
 
 class CareerPortalSettingsSerializer(serializers.ModelSerializer):
@@ -52,11 +69,27 @@ class CandidateSerializer(serializers.ModelSerializer):
     job_title = serializers.CharField(source='job.title', read_only=True)
     match_passed = serializers.SerializerMethodField()
     proposed_reporting_manager_name = serializers.SerializerMethodField()
+    has_active_session = serializers.SerializerMethodField()
+    has_interview_scheduled = serializers.SerializerMethodField()
+    campaign_title = serializers.CharField(source='campaign.title', read_only=True, allow_null=True)
 
     class Meta:
         model = Candidate
         fields = '__all__'
-        read_only_fields = ('parsed_resume_text', 'match_breakdown', 'ai_match_score')
+        read_only_fields = (
+            'parsed_resume_text',
+            'match_breakdown',
+            'ai_match_score',
+            'portal_token',
+            'outreach_status',
+            'outreach_sent_at',
+        )
+
+    def get_has_active_session(self, obj):
+        return obj.ai_sessions.exclude(status__in=('completed', 'failed', 'expired')).exists()
+
+    def get_has_interview_scheduled(self, obj):
+        return obj.ai_sessions.exists()
 
     def get_match_passed(self, obj):
         return obj.ai_match_score >= (obj.job.match_threshold or 70)
@@ -84,6 +117,38 @@ class CandidateSerializer(serializers.ModelSerializer):
                     {'proposed_reporting_manager': 'Future reporting manager must be an active employee.'}
                 )
         return attrs
+
+
+class RecruitmentCampaignListSerializer(serializers.ModelSerializer):
+    job_title = serializers.CharField(source='job.title', read_only=True)
+    stats = serializers.SerializerMethodField()
+
+    class Meta:
+        model = RecruitmentCampaign
+        fields = [
+            'id',
+            'title',
+            'status',
+            'job',
+            'job_title',
+            'send_rate_per_minute',
+            'created_at',
+            'stats',
+        ]
+
+    def get_stats(self, obj):
+        return campaign_stats(obj)
+
+
+class RecruitmentCampaignDetailSerializer(RecruitmentCampaignListSerializer):
+    class Meta(RecruitmentCampaignListSerializer.Meta):
+        fields = RecruitmentCampaignListSerializer.Meta.fields + [
+            'outreach_subject',
+            'outreach_body_html',
+            'outreach_body_text',
+            'default_reporting_manager',
+            'created_by',
+        ]
 
 
 class InterviewSerializer(serializers.ModelSerializer):
@@ -114,6 +179,7 @@ class AiInterviewSessionSerializer(serializers.ModelSerializer):
     candidate_name = serializers.SerializerMethodField()
     job_title = serializers.CharField(source='job.title', read_only=True)
     magic_link = serializers.SerializerMethodField()
+    report_id = serializers.SerializerMethodField()
 
     class Meta:
         model = AiInterviewSession
@@ -126,18 +192,22 @@ class AiInterviewSessionSerializer(serializers.ModelSerializer):
         from .services import get_magic_link
         return get_magic_link(obj)
 
+    def get_report_id(self, obj):
+        report = getattr(obj, 'report', None)
+        return str(report.id) if report else None
+
 
 class AiInterviewSessionPublicSerializer(serializers.ModelSerializer):
     candidate_name = serializers.SerializerMethodField()
     job_title = serializers.CharField(source='job.title', read_only=True)
     question_count = serializers.SerializerMethodField()
-    assessment_enabled = serializers.BooleanField(source='job.assessment_enabled')
+    include_assessment = serializers.BooleanField(read_only=True)
 
     class Meta:
         model = AiInterviewSession
         fields = (
             'id', 'status', 'candidate_name', 'job_title', 'expires_at',
-            'current_question_index', 'question_count', 'assessment_enabled',
+            'current_question_index', 'question_count', 'include_assessment',
         )
 
     def get_candidate_name(self, obj):
@@ -195,3 +265,10 @@ class AiInterviewReportSerializer(serializers.ModelSerializer):
     def get_candidate_name(self, obj):
         c = obj.session.candidate
         return f"{c.first_name} {c.last_name}"
+
+
+class AiInterviewBugReportSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = AiInterviewBugReport
+        fields = ('id', 'session', 'title', 'description', 'image', 'created_at')
+        read_only_fields = ('id', 'created_at')

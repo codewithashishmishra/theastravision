@@ -11,6 +11,8 @@ import { decryptEnvelope, isE2EEEnvelope } from '@/lib/e2ee/crypto';
 import { ensureE2EESession, rehandshake } from '@/lib/e2ee/handshake';
 import { getAesKey, getSessionId, nextSeq } from '@/lib/e2ee/sessionStore';
 
+// Use the same browser host for API and app (both localhost or both 127.0.0.1), or set
+// NEXT_PUBLIC_API_URL=/api/v1 to proxy via next.config rewrites so refresh cookies work.
 const api = axios.create({
   baseURL: process.env.NEXT_PUBLIC_API_URL || 'http://127.0.0.1:8000/api/v1',
   withCredentials: true,
@@ -98,10 +100,7 @@ function logHttpDebug(
 }
 
 function clearTokensAndRedirectToLogin(): void {
-  clearAccessToken();
-  if (typeof window !== 'undefined' && !window.location.pathname.startsWith('/login')) {
-    window.location.href = '/login';
-  }
+  void import('@/lib/logout').then((m) => m.logout({ redirect: true }));
 }
 
 export class PlatformCooldownError extends Error {
@@ -235,8 +234,11 @@ api.interceptors.response.use(
       api.defaults.headers.common.Authorization = `Bearer ${access}`;
       originalRequest.headers.Authorization = `Bearer ${access}`;
       return api(originalRequest);
-    } catch {
-      clearTokensAndRedirectToLogin();
+    } catch (refreshErr) {
+      const refreshStatus = axios.isAxiosError(refreshErr) ? refreshErr.response?.status : undefined;
+      if (refreshStatus === 401 || refreshStatus === 403) {
+        clearTokensAndRedirectToLogin();
+      }
       return Promise.reject(error);
     }
   }

@@ -4,6 +4,7 @@ from wfh.models import (
     ActivitySummary,
     EmployeeConsent,
     IdleLog,
+    ProductivityRule,
     ScreenshotCapture,
     TrackerAppVersion,
     TrackerAuditLog,
@@ -14,6 +15,7 @@ from wfh.models import (
     WorkSessionEvent,
     WorkSessionHeartbeat,
     TrackerBugReport,
+    WorkSessionFocusEvent,
 )
 
 
@@ -141,12 +143,21 @@ class SessionReportEventSerializer(serializers.Serializer):
     metadata = serializers.DictField(required=False, default=dict)
 
 
+class SessionFocusSegmentSerializer(serializers.Serializer):
+    timestamp = serializers.DateTimeField()
+    application_name = serializers.CharField(max_length=255, required=False, allow_blank=True)
+    active_tab_title = serializers.CharField(max_length=512, required=False, allow_blank=True)
+    window_title = serializers.CharField(max_length=512, required=False, allow_blank=True)
+    focus_seconds = serializers.IntegerField(min_value=0, required=False, default=0)
+
+
 class SessionReportSerializer(serializers.Serializer):
     task_title = serializers.CharField(max_length=255, required=False, allow_blank=True)
     task_description = serializers.CharField(required=False, allow_blank=True)
     totals = serializers.DictField()
     spoof_flags = serializers.ListField(child=serializers.CharField(), required=False, default=list)
     events = SessionReportEventSerializer(many=True)
+    focus_segments = SessionFocusSegmentSerializer(many=True, required=False, default=list)
 
 
 class IdleLogSerializer(serializers.ModelSerializer):
@@ -166,6 +177,27 @@ class ActivitySummarySerializer(serializers.ModelSerializer):
     class Meta:
         model = ActivitySummary
         fields = "__all__"
+
+
+class ProductivityRuleSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = ProductivityRule
+        fields = "__all__"
+        read_only_fields = ("id", "tenant", "created_at", "updated_at")
+
+
+class WorkSessionFocusEventSerializer(serializers.ModelSerializer):
+    screenshot_url = serializers.SerializerMethodField()
+
+    class Meta:
+        model = WorkSessionFocusEvent
+        fields = "__all__"
+        read_only_fields = ("id", "tenant", "employee", "created_at", "updated_at")
+
+    def get_screenshot_url(self, obj):
+        if not obj.screenshot_id:
+            return ""
+        return f"/api/v1/wfh/screenshots/{obj.screenshot_id}/"
 
 
 class TrackerAuditLogSerializer(serializers.ModelSerializer):

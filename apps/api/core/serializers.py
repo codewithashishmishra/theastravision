@@ -1,7 +1,17 @@
 from rest_framework import serializers
 
 from core.jurisdictions import normalize_jurisdiction
-from .models import Tenant, User, Role, Permission, UserRoleMapping, EnvConfiguration, FeatureFlag
+from .models import (
+    Tenant,
+    User,
+    Role,
+    Permission,
+    UserRoleMapping,
+    EnvConfiguration,
+    FeatureFlag,
+    TenantEmailSettings,
+    OutboundEmailLog,
+)
 import json
 
 
@@ -88,6 +98,58 @@ class EnvConfigurationSerializer(serializers.ModelSerializer):
             instance.set_config({**existing, **config_data})
         instance.save()
         return instance
+
+
+class TenantEmailSettingsSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = TenantEmailSettings
+        fields = [
+            'id',
+            'tenant',
+            'from_email',
+            'from_name',
+            'reply_to',
+            'notify_roles',
+            'created_at',
+            'updated_at',
+        ]
+        read_only_fields = ['id', 'tenant', 'created_at', 'updated_at']
+
+
+class OutboundEmailLogSerializer(serializers.ModelSerializer):
+    created_by_email = serializers.SerializerMethodField()
+
+    class Meta:
+        model = OutboundEmailLog
+        fields = [
+            'id',
+            'tenant',
+            'from_email',
+            'from_name',
+            'to_emails',
+            'cc_emails',
+            'subject',
+            'body_html',
+            'body_text',
+            'status',
+            'source',
+            'source_id',
+            'message_id',
+            'smtp_error',
+            'sent_at',
+            'opened_at',
+            'created_by',
+            'created_by_email',
+            'parent_log',
+            'created_at',
+            'updated_at',
+        ]
+        read_only_fields = fields
+
+    def get_created_by_email(self, obj):
+        if obj.created_by_id:
+            return obj.created_by.email
+        return None
 
 
 class FeatureFlagSerializer(serializers.ModelSerializer):

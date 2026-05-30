@@ -14,6 +14,8 @@ import {
 } from '@nextui-org/react';
 import api from '@/lib/axios';
 import { setFrontendDebugEnabled } from '@/lib/debugLogStore';
+import { platformHealthApi } from '@/lib/hrmsApi';
+import { useAuth } from '@/lib/AuthProvider';
 
 const MODULE_UTIL = 'PLATFORM_UTILIZATION';
 const MODULE_SMTP = 'SMTP';
@@ -36,6 +38,7 @@ type SmtpConfig = {
   port: number;
   use_tls: boolean;
   use_ssl: boolean;
+  ssl_verify: boolean;
   user: string;
   password: string;
   from_email: string;
@@ -53,6 +56,7 @@ type ImapConfig = {
   host: string;
   port: number;
   use_ssl: boolean;
+  ssl_verify: boolean;
   user: string;
   password: string;
   folder: string;
@@ -81,13 +85,14 @@ const UTIL_DEFAULTS: UtilizationConfig = {
 };
 
 const SMTP_DEFAULTS: SmtpConfig = {
-  host: 'smtpout.secureserver.net',
-  port: 587,
-  use_tls: true,
-  use_ssl: false,
-  user: 'sales@theastravision.com',
+  host: 'p3plzcpnl506724.prod.phx3.secureserver.net',
+  port: 465,
+  use_tls: false,
+  use_ssl: true,
+  ssl_verify: true,
+  user: 'notifications@theastravision.com',
   password: '',
-  from_email: 'sales@theastravision.com',
+  from_email: 'notifications@theastravision.com',
   from_name: 'The Astra Vision',
   rate_per_minute: 30,
 };
@@ -99,10 +104,11 @@ const AI_DEFAULTS: AiConfig = {
 };
 
 const IMAP_DEFAULTS: ImapConfig = {
-  host: 'imap.secureserver.net',
+  host: 'p3plzcpnl506724.prod.phx3.secureserver.net',
   port: 993,
   use_ssl: true,
-  user: 'sales@theastravision.com',
+  ssl_verify: true,
+  user: 'notifications@theastravision.com',
   password: '',
   folder: 'INBOX',
   poll_interval_minutes: 5,
@@ -112,11 +118,25 @@ const DEBUG_DEFAULTS: DebugConfig = {
   enabled: false,
 };
 
+type ModuleHealth = {
+  module: string;
+  status: string;
+  latency_ms: number;
+  message: string;
+};
+
+const HEALTH_STATUS_COLOR: Record<string, 'success' | 'warning' | 'danger' | 'default'> = {
+  healthy: 'success',
+  degraded: 'warning',
+  down: 'danger',
+  skipped: 'default',
+};
+
 async function loadModule<T>(module: string, defaults: T): Promise<{ id: string | null; form: T }> {
   try {
     const res = await api.get<EnvConfigRow<T>>(`/env-configs/${module}/`);
     const merged = { ...defaults, ...res.data.decrypted_config };
-    if (module === MODULE_SMTP && merged.password) {
+    if (module === MODULE_SMTP && (merged as SmtpConfig).password) {
       (merged as SmtpConfig).password = '********';
     }
     if (module === MODULE_AI && (merged as AiConfig).api_key) {
@@ -152,9 +172,16 @@ async function saveModule<T extends Record<string, unknown>>(
 }
 
 export default function PlatformConfigPage() {
+  const { user } = useAuth();
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState('');
+  const [testSmtpLoading, setTestSmtpLoading] = useState(false);
+  const [testImapLoading, setTestImapLoading] = useState(false);
+  const [testToEmail, setTestToEmail] = useState('');
+  const [healthLoading, setHealthLoading] = useState(false);
+  const [healthModules, setHealthModules] = useState<ModuleHealth[]>([]);
+  const [simulateLoading, setSimulateLoading] = useState(false);
 
   const [utilId, setUtilId] = useState<string | null>(null);
   const [utilForm, setUtilForm] = useState<UtilizationConfig>(UTIL_DEFAULTS);
@@ -291,6 +318,67 @@ export default function PlatformConfigPage() {
     }
   };
 
+  const handleTestSmtp = async () => {
+    const to = testToEmail || user?.email;
+    if (!to) {
+      setMessage('Enter a test recipient email or sign in with an email address.');
+      return;
+    }
+    setTestSmtpLoading(true);
+    setMessage('');
+    try {
+      const res = await platformHealthApi.testSmtp(to);
+      setMessage(res.data.ok ? res.data.detail : `SMTP test failed: ${res.data.detail}`);
+    } catch (err: unknown) {
+      const detail =
+        (err as { response?: { data?: { detail?: string } } })?.response?.data?.detail ||
+        'SMTP test request failed.';
+      setMessage(detail);
+    } finally {
+      setTestSmtpLoading(false);
+    }
+  };
+
+  const handleTestImap = async () => {
+    setTestImapLoading(true);
+    setMessage('');
+    try {
+      const res = await platformHealthApi.testImap();
+      const extra =
+        res.data.mailbox_count != null ? ` (${res.data.mailbox_count} messages)` : '';
+      setMessage(res.data.ok ? `${res.data.detail}${extra}` : `IMAP test failed: ${res.data.detail}`);
+    } catch {
+      setMessage('IMAP test request failed.');
+    } finally {
+      setTestImapLoading(false);
+    }
+  };
+
+  const loadHealth = async () => {
+    setHealthLoading(true);
+    try {
+      const res = await platformHealthApi.modules();
+      setHealthModules(res.data);
+    } catch {
+      setMessage('Failed to load module health.');
+    } finally {
+      setHealthLoading(false);
+    }
+  };
+
+  const handleSimulateImapPoll = async () => {
+    setSimulateLoading(true);
+    setMessage('');
+    try {
+      const res = await platformHealthApi.simulateImapPoll();
+      setMessage(`IMAP poll completed: ${JSON.stringify(res.data.result ?? res.data)}`);
+    } catch {
+      setMessage('IMAP poll simulation failed.');
+    } finally {
+      setSimulateLoading(false);
+    }
+  };
+
   const handleSaveDebug = async () => {
     setSaving(true);
     setMessage('');
@@ -399,8 +487,8 @@ export default function PlatformConfigPage() {
           <Card className="border border-divider shadow-sm mt-4">
             <CardBody className="gap-4 p-6">
               <p className="text-sm text-default-500">
-                GoDaddy: host <strong>smtpout.secureserver.net</strong>, port 587 with TLS. If auth
-                fails, try port 465 with SSL enabled.
+                cPanel SSL/TLS: host <strong>p3plzcpnl506724.prod.phx3.secureserver.net</strong>,
+                port <strong>465</strong> with SSL (not STARTTLS on 587).
               </p>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <Input
@@ -458,10 +546,31 @@ export default function PlatformConfigPage() {
                 >
                   Use SSL
                 </Switch>
+                <Switch
+                  isSelected={smtpForm.ssl_verify}
+                  onValueChange={(v) => setSmtpForm((p) => ({ ...p, ssl_verify: v }))}
+                >
+                  Verify TLS certificate
+                </Switch>
               </div>
-              <Button color="primary" isLoading={saving} onPress={handleSaveSmtp}>
-                Save SMTP
-              </Button>
+              <p className="text-xs text-default-500">
+                Disable certificate verification only for local mail or if antivirus intercepts
+                SMTP TLS (not recommended for production).
+              </p>
+              <Input
+                label="Test recipient email"
+                placeholder={user?.email || 'you@company.com'}
+                value={testToEmail}
+                onValueChange={setTestToEmail}
+              />
+              <div className="flex flex-wrap gap-3">
+                <Button color="primary" isLoading={saving} onPress={handleSaveSmtp}>
+                  Save SMTP
+                </Button>
+                <Button variant="bordered" isLoading={testSmtpLoading} onPress={handleTestSmtp}>
+                  Test SMTP
+                </Button>
+              </div>
             </CardBody>
           </Card>
         </Tab>
@@ -471,7 +580,7 @@ export default function PlatformConfigPage() {
             <CardBody className="gap-4 p-6">
               <p className="text-sm text-default-500">
                 Inbound mailbox for cold campaign reply detection. Celery polls every 5 minutes.
-                GoDaddy: <strong>imap.secureserver.net</strong> port 993 SSL.
+                cPanel: same host as SMTP, port <strong>993</strong> IMAP over SSL.
               </p>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <Input
@@ -503,15 +612,84 @@ export default function PlatformConfigPage() {
                   onValueChange={(v) => setImapForm((p) => ({ ...p, folder: v }))}
                 />
               </div>
-              <Switch
-                isSelected={imapForm.use_ssl}
-                onValueChange={(v) => setImapForm((p) => ({ ...p, use_ssl: v }))}
-              >
-                Use SSL
-              </Switch>
-              <Button color="primary" isLoading={saving} onPress={handleSaveImap}>
-                Save IMAP
+              <div className="flex flex-wrap gap-6">
+                <Switch
+                  isSelected={imapForm.use_ssl}
+                  onValueChange={(v) => setImapForm((p) => ({ ...p, use_ssl: v }))}
+                >
+                  Use SSL
+                </Switch>
+                <Switch
+                  isSelected={imapForm.ssl_verify}
+                  onValueChange={(v) => setImapForm((p) => ({ ...p, ssl_verify: v }))}
+                >
+                  Verify TLS certificate
+                </Switch>
+              </div>
+              <p className="text-xs text-default-500">
+                Disable only if TLS inspection breaks IMAP on this machine.
+              </p>
+              <div className="flex flex-wrap gap-3">
+                <Button color="primary" isLoading={saving} onPress={handleSaveImap}>
+                  Save IMAP
+                </Button>
+                <Button variant="bordered" isLoading={testImapLoading} onPress={handleTestImap}>
+                  Test IMAP
+                </Button>
+              </div>
+            </CardBody>
+          </Card>
+        </Tab>
+
+        <Tab key="health" title="Health">
+          <Card className="border border-divider shadow-sm mt-4">
+            <CardBody className="gap-4 p-6">
+              <p className="text-sm text-default-500">
+                Connectivity checks for database, Redis, Celery, AI service, SMTP, and IMAP.
+              </p>
+              <Button color="primary" variant="flat" isLoading={healthLoading} onPress={loadHealth}>
+                Run health checks
               </Button>
+              {healthModules.length > 0 && (
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  {healthModules.map((m) => (
+                    <div
+                      key={m.module}
+                      className="border border-divider rounded-lg p-3 flex flex-col gap-1"
+                    >
+                      <div className="flex justify-between items-center">
+                        <span className="font-semibold capitalize">{m.module.replace('_', ' ')}</span>
+                        <span
+                          className={`text-xs px-2 py-0.5 rounded-full ${
+                            HEALTH_STATUS_COLOR[m.status] === 'success'
+                              ? 'bg-success-100 text-success-700'
+                              : m.status === 'down'
+                                ? 'bg-danger-100 text-danger-700'
+                                : m.status === 'degraded'
+                                  ? 'bg-warning-100 text-warning-700'
+                                  : 'bg-default-100 text-default-600'
+                          }`}
+                        >
+                          {m.status}
+                        </span>
+                      </div>
+                      <p className="text-xs text-default-500">{m.message}</p>
+                      {m.latency_ms > 0 && (
+                        <p className="text-xs text-default-400">{m.latency_ms} ms</p>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              )}
+              <div className="border-t border-divider pt-4 mt-2">
+                <p className="font-semibold mb-2">Email simulation</p>
+                <p className="text-sm text-default-500 mb-3">
+                  Trigger a one-time IMAP inbox poll (cold campaign reply detection).
+                </p>
+                <Button variant="bordered" isLoading={simulateLoading} onPress={handleSimulateImapPoll}>
+                  Poll IMAP now
+                </Button>
+              </div>
             </CardBody>
           </Card>
         </Tab>

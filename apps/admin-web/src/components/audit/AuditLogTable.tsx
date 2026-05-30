@@ -8,6 +8,7 @@ import {
 import { Search, RefreshCw, ChevronDown, ChevronRight } from 'lucide-react';
 import ExportButton from '@/components/wfh/ExportButton';
 import { TenantFilterSelect } from '@/components/audit/TenantFilterSelect';
+import { ModuleFilterSelect } from '@/components/audit/ModuleFilterSelect';
 import type { AuditFilters, Pagination as PaginationMeta } from '@/lib/auditApi';
 
 export type AuditColumn = {
@@ -84,11 +85,9 @@ export function AuditLogTable<T extends Record<string, unknown>>({
           onValueChange={(v) => onFiltersChange({ ...filters, search: v, page: 1 })}
         />
         {showModuleFilter && (
-          <Input
-            className="max-w-xs"
-            placeholder="Module"
+          <ModuleFilterSelect
             value={filters.module || ''}
-            onValueChange={(v) => onFiltersChange({ ...filters, module: v, page: 1 })}
+            onChange={(module) => onFiltersChange({ ...filters, module: module || undefined, page: 1 })}
           />
         )}
         <Input
@@ -129,7 +128,11 @@ export function AuditLogTable<T extends Record<string, unknown>>({
         {loading ? (
           <div className="flex justify-center p-12"><Spinner /></div>
         ) : (
-          <Table aria-label={title} removeWrapper>
+          <Table
+            aria-label={title}
+            removeWrapper
+            classNames={{ wrapper: 'w-full min-w-full', table: 'w-full' }}
+          >
             <TableHeader>
               <TableColumn width={40}> </TableColumn>
               {columns.map((col) => (
@@ -164,6 +167,11 @@ export function AuditLogTable<T extends Record<string, unknown>>({
                             {JSON.stringify(row[metadataKey], null, 2)}
                           </pre>
                         </TableCell>
+                        {columns.slice(1).map((col) => (
+                          <TableCell key={`meta-${col.key}`} className="hidden p-0 max-h-0">
+                            {null}
+                          </TableCell>
+                        ))}
                       </TableRow>
                     ) : null}
                   </React.Fragment>

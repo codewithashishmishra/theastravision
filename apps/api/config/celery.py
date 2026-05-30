@@ -45,6 +45,10 @@ app.conf.beat_schedule = {
         "task": "recruitment.tasks.cleanup_expired_sessions",
         "schedule": crontab(minute="*/15"),
     },
+    "purge-expired-interview-media": {
+        "task": "recruitment.tasks.purge_expired_interview_media",
+        "schedule": crontab(hour=2, minute=30),
+    },
     "process-cold-campaign-followups": {
         "task": "cold_campaign.tasks.process_cold_campaign_followups",
         "schedule": crontab(minute="*/15"),

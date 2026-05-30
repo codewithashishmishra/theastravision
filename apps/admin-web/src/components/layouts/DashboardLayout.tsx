@@ -13,7 +13,7 @@ import { menuConfig, Role, MenuSection } from '@/config/menuConfig';
 import { getStoredJurisdictions, menuVisibleForJurisdictions } from '@/lib/jurisdiction';
 import { useQueryClient } from '@tanstack/react-query';
 import { LogOut, Settings } from 'lucide-react';
-import { clearAuthSession } from '@/lib/authSession';
+import { useLogout } from '@/lib/useLogout';
 import { useAuth } from '@/lib/AuthProvider';
 import { getRoleHomeRoute, isDashboardPath } from '@/lib/roleRouting';
 import { findMenuItemByPath, isPathAllowedForRoles } from '@/lib/menuAccess';
@@ -29,6 +29,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   const pathname = usePathname();
   const router = useRouter();
   const queryClient = useQueryClient();
+  const performLogout = useLogout();
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [redirectNotice, setRedirectNotice] = useState('');
   const [tenantPlan, setTenantPlan] = useState<string>('');
@@ -76,8 +77,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   };
 
   const handleLogout = () => {
-    clearAuthSession();
-    router.push('/login');
+    void performLogout();
   };
 
   const toggleSidebar = () => setSidebarOpen(!sidebarOpen);
@@ -241,7 +241,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
                 </div>
               </DropdownTrigger>
               <DropdownMenu aria-label="User Actions" variant="flat">
-                <DropdownItem key="settings" startContent={<Settings size={16} />} onPress={() => router.push('/settings/global')}>
+                <DropdownItem key="settings" startContent={<Settings size={16} />} onPress={() => router.push(primaryRole === 'Super Admin' ? '/settings/global' : '/settings/account')}>
                   Account Settings
                 </DropdownItem>
                 <DropdownItem key="logout" color="danger" startContent={<LogOut size={16} />} onPress={handleLogout}>
@@ -334,7 +334,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
         )}
 
         <main className="flex-1 overflow-y-auto px-6 md:px-8 pb-4 custom-scrollbar relative z-0 min-h-0">
-          <div className="max-w-7xl mx-auto w-full animate-fade-in min-h-full flex flex-col">
+          <div className="w-full animate-fade-in min-h-full flex flex-col">
             {redirectNotice && (
               <div className="mb-4 p-3 rounded-xl bg-primary/10 border border-primary/20 text-sm text-primary font-medium">
                 {redirectNotice}

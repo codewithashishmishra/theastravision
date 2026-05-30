@@ -1,16 +1,30 @@
 import os
+import ssl
 from pathlib import Path
 from datetime import timedelta
 from dotenv import load_dotenv
 import dj_database_url
 from django.core.exceptions import ImproperlyConfigured
 
-load_dotenv()
-
 BASE_DIR = Path(__file__).resolve().parent.parent
+# .env wins over a stale shell DATABASE_URL (e.g. sqlite from an old session)
+load_dotenv(BASE_DIR / ".env", override=True)
 
 _DEBUG_RAW = os.environ.get("DEBUG", "True").lower() in ["true", "1", "yes"]
 DEBUG = _DEBUG_RAW
+
+_PLATFORM_INSECURE_SSL = os.environ.get(
+    "PLATFORM_INSECURE_SSL",
+    os.environ.get("DISABLE_SSL_VERIFY", "false"),
+).lower() in ["true", "1", "yes"]
+if _PLATFORM_INSECURE_SSL:
+    if not DEBUG:
+        raise ImproperlyConfigured(
+            "PLATFORM_INSECURE_SSL / DISABLE_SSL_VERIFY cannot be enabled when DEBUG=False."
+        )
+    # Bypass TLS verification for urllib/requests (local antivirus HTTPS inspection).
+    ssl._create_default_https_context = ssl._create_unverified_context
+PLATFORM_INSECURE_SSL = _PLATFORM_INSECURE_SSL
 
 _SECRET_DEFAULT = "django-insecure-default-key-for-dev"
 SECRET_KEY = os.environ.get("SECRET_KEY", _SECRET_DEFAULT)
@@ -72,6 +86,12 @@ INSTALLED_APPS = [
 
 PUBLIC_API_BASE_URL = os.environ.get('PUBLIC_API_BASE_URL', 'http://127.0.0.1:8000')
 AI_SERVICE_BASE_URL = os.environ.get('AI_SERVICE_BASE_URL', 'http://127.0.0.1:8001')
+XYZ_AUDIO_WS_URL = os.environ.get('XYZ_AUDIO_WS_URL', '').strip()
+XYZ_AUDIO_HTTP_BASE_URL = os.environ.get('XYZ_AUDIO_HTTP_BASE_URL', '').strip().rstrip('/')
+XYZ_AUDIO_API_KEY = os.environ.get('XYZ_AUDIO_API_KEY', '').strip()
+XYZ_SALAD_API_KEY = os.environ.get('XYZ_SALAD_API_KEY', '').strip()
+XYZ_AUDIO_TIMEOUT_SECONDS = int(os.environ.get('XYZ_AUDIO_TIMEOUT_SECONDS', '15'))
+XYZ_AUDIO_HEARTBEAT_SECONDS = int(os.environ.get('XYZ_AUDIO_HEARTBEAT_SECONDS', '10'))
 OPENAI_DEFAULT_MODEL = os.environ.get('OPENAI_MODEL', 'gpt-5.4-mini')
 FRONTEND_APP_URL = os.environ.get('FRONTEND_APP_URL', os.environ.get('NEXT_PUBLIC_APP_URL', 'http://localhost:3000'))
 CAREERS_APP_URL = os.environ.get('CAREERS_APP_URL', 'http://localhost:3001')
@@ -80,6 +100,30 @@ JOB_BOARD_CDN_URL = os.environ.get(
     f"{PUBLIC_API_BASE_URL.rstrip('/')}/static/job-board",
 )
 DEFAULT_FROM_EMAIL = os.environ.get('DEFAULT_FROM_EMAIL', 'noreply@aastraahr.com')
+
+# Platform email (GoDaddy notifications@ mailbox) — secrets via .env only
+PLATFORM_SMTP_HOST = os.environ.get(
+    'PLATFORM_SMTP_HOST', 'p3plzcpnl506724.prod.phx3.secureserver.net'
+)
+PLATFORM_SMTP_PORT = int(os.environ.get('PLATFORM_SMTP_PORT', '465'))
+PLATFORM_SMTP_USE_TLS = os.environ.get('PLATFORM_SMTP_USE_TLS', 'false').lower() in ('true', '1', 'yes')
+PLATFORM_SMTP_USE_SSL = os.environ.get('PLATFORM_SMTP_USE_SSL', 'true').lower() in ('true', '1', 'yes')
+PLATFORM_SMTP_USER = os.environ.get('PLATFORM_SMTP_USER', 'notifications@theastravision.com')
+PLATFORM_SMTP_PASSWORD = os.environ.get('PLATFORM_SMTP_PASSWORD', '')
+PLATFORM_SMTP_FROM_EMAIL = os.environ.get('PLATFORM_SMTP_FROM_EMAIL', 'notifications@theastravision.com')
+PLATFORM_SMTP_FROM_NAME = os.environ.get('PLATFORM_SMTP_FROM_NAME', 'The Astra Vision')
+PLATFORM_IMAP_HOST = os.environ.get(
+    'PLATFORM_IMAP_HOST', 'p3plzcpnl506724.prod.phx3.secureserver.net'
+)
+PLATFORM_IMAP_PORT = int(os.environ.get('PLATFORM_IMAP_PORT', '993'))
+PLATFORM_IMAP_USE_SSL = os.environ.get('PLATFORM_IMAP_USE_SSL', 'true').lower() in ('true', '1', 'yes')
+PLATFORM_IMAP_USER = os.environ.get('PLATFORM_IMAP_USER', 'notifications@theastravision.com')
+PLATFORM_IMAP_PASSWORD = os.environ.get('PLATFORM_IMAP_PASSWORD', '') or PLATFORM_SMTP_PASSWORD
+PLATFORM_DEFAULT_TENANT_FROM_EMAIL = os.environ.get(
+    'PLATFORM_DEFAULT_TENANT_FROM_EMAIL', 'notifications@theastravision.com'
+)
+PLATFORM_OPENAI_API_KEY = os.environ.get('PLATFORM_OPENAI_API_KEY', '').strip()
+PLATFORM_OPENAI_MODEL = os.environ.get('PLATFORM_OPENAI_MODEL', OPENAI_DEFAULT_MODEL)
 
 ASGI_APPLICATION = 'config.asgi.application'
 
@@ -268,6 +312,7 @@ CORS_ALLOW_HEADERS = [
     "x-client-ecdh-public",
     "x-internal-service",
     "x-internal-service-token",
+    "x-interview-token",
 ]
 
 if not DEBUG:

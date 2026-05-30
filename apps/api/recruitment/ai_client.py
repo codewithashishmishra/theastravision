@@ -58,3 +58,76 @@ def ai_get_bytes(path: str, json_payload: dict, timeout: int = 60) -> bytes:
     response = requests.post(url, json=json_payload, headers=_headers(), timeout=timeout)
     response.raise_for_status()
     return response.content
+
+
+def pre_generate_campaign_questions(
+    campaign_id: str,
+    job_title: str,
+    jd_text: str,
+    *,
+    timeout: int = 120,
+) -> list[dict]:
+    payload = {
+        'campaign_id': campaign_id,
+        'job_title': job_title,
+        'jd_text': jd_text,
+        'count': 5,
+    }
+    result = ai_post('/api/v1/ai/recruitment/campaign-baseline-questions', payload, timeout=timeout)
+    return list(result.get('questions') or [])
+
+
+def pre_generate_candidate_questions(
+    candidate_id: str,
+    campaign_id: str | None,
+    job_title: str,
+    jd_text: str,
+    resume_text: str,
+    experience_summary: str,
+    *,
+    timeout: int = 120,
+) -> list[dict]:
+    payload = {
+        'candidate_id': candidate_id,
+        'campaign_id': campaign_id,
+        'job_title': job_title,
+        'jd_text': jd_text,
+        'resume_text': resume_text,
+        'experience_summary': experience_summary,
+        'count': 5,
+    }
+    result = ai_post('/api/v1/ai/recruitment/candidate-adaptive-questions', payload, timeout=timeout)
+    return list(result.get('questions') or [])
+
+
+def semantic_evaluate_answer(
+    question: str,
+    benchmark_answer: str,
+    candidate_answer: str,
+    *,
+    timeout: int = 120,
+) -> dict:
+    payload = {
+        'question': question,
+        'benchmark_answer': benchmark_answer,
+        'candidate_answer': candidate_answer,
+    }
+    return ai_post('/api/v1/ai/recruitment/semantic-evaluation', payload, timeout=timeout)
+
+
+def generate_conversation_message(
+    *,
+    question_text: str,
+    candidate_name: str,
+    job_title: str,
+    context: str = 'interviewer_turn',
+    timeout: int = 60,
+) -> str:
+    payload = {
+        'question_text': question_text,
+        'candidate_name': candidate_name,
+        'job_title': job_title,
+        'context': context,
+    }
+    result = ai_post('/api/v1/ai/recruitment/conversation-message', payload, timeout=timeout)
+    return (result.get('message') or '').strip()

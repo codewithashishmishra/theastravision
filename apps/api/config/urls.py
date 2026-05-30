@@ -11,6 +11,14 @@ from config.schema_views import (
 )
 
 from core.views import TenantViewSet, UserViewSet, RoleViewSet, PermissionViewSet, UserRoleMappingViewSet, EnvConfigurationViewSet, FeatureFlagViewSet, EnvFileView
+from core.email_views import (
+    EmailTrackView,
+    PlatformModuleHealthView,
+    TenantEmailSettingsAPIView,
+    TenantEmailSettingsTestSendView,
+    OutboundEmailLogViewSet,
+    EmailSimulateView,
+)
 from core.addon_views import TenantAddonViewSet
 from organization.views import (
     CompanyProfileViewSet, LegalEntityViewSet, BranchViewSet, DepartmentViewSet, DesignationViewSet, 
@@ -31,6 +39,7 @@ router.register(r'user-roles', UserRoleMappingViewSet, basename='user-role')
 router.register(r'env-configs', EnvConfigurationViewSet, basename='env-config')
 router.register(r'feature-flags', FeatureFlagViewSet, basename='feature-flag')
 router.register(r'platform/tenant-addons', TenantAddonViewSet, basename='tenant-addon')
+router.register(r'outbound-email-logs', OutboundEmailLogViewSet, basename='outbound-email-logs')
 
 # Organization
 router.register(r'company-profiles', CompanyProfileViewSet, basename='company-profile')
@@ -80,6 +89,11 @@ urlpatterns = [
     path('api/v1/platform/services/', monitoring_views.PlatformServicesView.as_view()),
     path('api/v1/platform/system-logs/', monitoring_views.PlatformSystemLogsView.as_view()),
     path('api/v1/platform/system-logs/export/', monitoring_views.PlatformSystemLogsExportView.as_view()),
+    path('api/v1/platform/health/modules/', PlatformModuleHealthView.as_view()),
+    path('api/v1/tenant-email-settings/', TenantEmailSettingsAPIView.as_view()),
+    path('api/v1/tenant-email-settings/test-send/', TenantEmailSettingsTestSendView.as_view()),
+    path('api/v1/email/track/<uuid:log_id>.gif', EmailTrackView.as_view()),
+    path('api/v1/email/simulate/', EmailSimulateView.as_view()),
     path('api/v1/audit/', include('core.audit_urls')),
     
     # API endpoints

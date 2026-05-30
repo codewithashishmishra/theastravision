@@ -13,12 +13,14 @@ from core.storage import TrackerStorageService
 from employees.models import Employee
 from wfh.models import (
     ActivitySummary,
+    ProductivityRule,
     ScreenshotCapture,
     TrackerAuditLog,
     TrackerDevice,
     WFHPolicy,
     WFHRequest,
     WorkSession,
+    WorkSessionFocusEvent,
 )
 from wfh.permissions import CanViewEmployeeTracking
 from wfh.serializers import (
@@ -26,11 +28,13 @@ from wfh.serializers import (
     ScreenshotCaptureSerializer,
     TrackerAuditLogSerializer,
     TrackerAppVersionSerializer,
+    ProductivityRuleSerializer,
     TrackerDeviceSerializer,
     WFHPolicySerializer,
     WFHRequestCreateSerializer,
     WFHRequestSerializer,
     WorkSessionSerializer,
+    WorkSessionFocusEventSerializer,
 )
 from wfh.services import cancel_request, hr_approve, manager_approve, reject_request
 from wfh.services.notifications import notify_wfh_event
@@ -303,6 +307,104 @@ class WFHProductivityReportView(APIView):
             .order_by("-summary_date")[:30]
         )
         return Response(list(qs))
+
+
+class ProductivityRuleListCreateView(APIView):
+    permission_classes = [IsAuthenticated, require_permission("wfh.policy.manage", "wfh.admin.settings")]
+
+    def get(self, request):
+        tenant_id = resolve_tenant_id(request.user)
+        if not tenant_id:
+            return Response([])
+        rules = ProductivityRule.objects.filter(tenant_id=tenant_id).order_by("name")
+        return Response(ProductivityRuleSerializer(rules, many=True).data)
+
+    def post(self, request):
+        tenant_id = resolve_tenant_id(request.user)
+        if not tenant_id:
+            return Response({"detail": "No tenant assigned to your account."}, status=403)
+        ser = ProductivityRuleSerializer(data=request.data)
+        ser.is_valid(raise_exception=True)
+        rule = ser.save(tenant_id=tenant_id)
+        return Response(ProductivityRuleSerializer(rule).data, status=201)
+
+
+class ProductivityRuleDetailView(APIView):
+    permission_classes = [IsAuthenticated, require_permission("wfh.policy.manage", "wfh.admin.settings")]
+
+    def put(self, request, pk):
+        tenant_id = resolve_tenant_id(request.user)
+        rule = ProductivityRule.objects.filter(tenant_id=tenant_id, pk=pk).first()
+        if not rule:
+            return Response(status=404)
+        ser = ProductivityRuleSerializer(rule, data=request.data, partial=True)
+        ser.is_valid(raise_exception=True)
+        ser.save()
+        return Response(ser.data)
+
+    def delete(self, request, pk):
+        tenant_id = resolve_tenant_id(request.user)
+        rule = ProductivityRule.objects.filter(tenant_id=tenant_id, pk=pk).first()
+        if not rule:
+            return Response(status=404)
+        rule.delete()
+        return Response(status=204)
+
+
+class WFHProductivityMatrixView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        tenant_id = resolve_tenant_id(request.user)
+        granularity = (request.query_params.get("granularity") or "daily").lower()
+        if not tenant_id:
+            return Response({"rows": [], "granularity": granularity})
+        if granularity not in {"hourly", "daily"}:
+            granularity = "daily"
+
+        start_date = timezone.localdate() - timedelta(days=7 if granularity == "hourly" else 30)
+        events = WorkSessionFocusEvent.objects.filter(
+            tenant_id=tenant_id,
+            occurred_at__date__gte=start_date,
+        ).values("occurred_at", "focus_seconds", "is_productive")
+
+        buckets: dict[str, dict] = {}
+        for row in events:
+            dt = row["occurred_at"]
+            key = dt.strftime("%Y-%m-%d %H:00") if granularity == "hourly" else dt.strftime("%Y-%m-%d")
+            bucket = buckets.setdefault(
+                key,
+                {"bucket": key, "productive_seconds": 0, "unproductive_seconds": 0, "total_seconds": 0},
+            )
+            sec = int(row["focus_seconds"] or 0)
+            bucket["total_seconds"] += sec
+            if row["is_productive"]:
+                bucket["productive_seconds"] += sec
+            else:
+                bucket["unproductive_seconds"] += sec
+
+        rows = []
+        for key in sorted(buckets.keys(), reverse=True):
+            b = buckets[key]
+            total = b["total_seconds"] or 1
+            b["productivity_ratio"] = round((b["productive_seconds"] / total) * 100, 2)
+            rows.append(b)
+        return Response({"granularity": granularity, "rows": rows})
+
+
+class WFHUnproductiveTimelineView(APIView):
+    permission_classes = [IsAuthenticated, CanViewEmployeeTracking]
+
+    def get(self, request):
+        tenant_id = resolve_tenant_id(request.user)
+        if not tenant_id:
+            return Response([])
+        session_id = request.query_params.get("session_id")
+        qs = WorkSessionFocusEvent.objects.filter(tenant_id=tenant_id, is_productive=False).select_related("screenshot")
+        if session_id:
+            qs = qs.filter(session_id=session_id)
+        events = qs.order_by("-occurred_at")[:500]
+        return Response(WorkSessionFocusEventSerializer(events, many=True).data)
 
 
 class SessionScreenshotsView(APIView):

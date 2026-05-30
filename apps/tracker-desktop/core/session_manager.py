@@ -8,6 +8,8 @@ from core.crypto import encrypt_bytes, sha256
 from core.gcm_crypto import screenshot_aad
 from core.offline_queue import OfflineQueue
 from core.screenshot import capture_all_monitors
+from core.runtime.agent import RandomScreenshotScheduler, parse_interval
+from core.runtime.factory import build_platform_agent
 from core.session_stats import SessionStats
 
 
@@ -30,7 +32,8 @@ class SessionManager:
         self._auto_pausing = False
         self._threads = []
         self.stats = SessionStats()
-        self.activity = ActivityMonitor(auto_pause_seconds=60)
+        self._auto_pause_seconds = int(self.policy.get("auto_pause_seconds", 60) or 60)
+        self.activity = ActivityMonitor(auto_pause_seconds=self._auto_pause_seconds)
         self.activity.register_callbacks(
             on_activity=self._on_activity,
             on_spoof=self._on_spoof,
@@ -41,6 +44,10 @@ class SessionManager:
         self._on_cooldown = on_cooldown
         self._idle_logged = False
         self._server_idle_threshold = policy.get("idle_threshold_seconds", 300)
+        self._platform_agent = build_platform_agent()
+        self._focus_lock = threading.Lock()
+        self._focus_started = time.time()
+        self._last_focus = {"app_name": "unknown", "tab_title": "", "window_title": ""}
 
     @property
     def is_active(self) -> bool:
@@ -97,6 +104,7 @@ class SessionManager:
             threading.Thread(target=self._idle_loop, daemon=True),
             threading.Thread(target=self._stats_tick_loop, daemon=True),
             threading.Thread(target=self._auto_pause_loop, daemon=True),
+            threading.Thread(target=self._focus_loop, daemon=True),
         ]
         for t in self._threads:
             t.start()
@@ -153,7 +161,8 @@ class SessionManager:
         while self._running:
             if not self._paused and self.activity.should_auto_pause():
                 self._trigger_auto_pause()
-            time.sleep(5)
+            # Check every second so auto-pause aligns closely with exact idle threshold.
+            time.sleep(1)
 
     def _heartbeat_loop(self):
         interval = self.policy.get("heartbeat_interval_seconds", 60)
@@ -171,7 +180,13 @@ class SessionManager:
             time.sleep(interval)
 
     def _screenshot_loop(self):
-        interval = self.policy.get("screenshot_interval_seconds", 15)
+        raw_interval = self.policy.get("screenshot_interval", self.policy.get("screenshot_interval_seconds", 15))
+        try:
+            interval = parse_interval(raw_interval)
+        except Exception:
+            interval = 15
+        scheduler = RandomScreenshotScheduler(interval_seconds=interval)
+        next_fixed_capture = time.time() + interval
         data_key = self.client.data_key
         while self._running:
             if self._paused:
@@ -182,7 +197,19 @@ class SessionManager:
             if not data_key or not self.session_id:
                 time.sleep(interval)
                 continue
+            should_capture = False
+            if interval <= 30:
+                now_epoch = time.time()
+                if now_epoch >= next_fixed_capture:
+                    should_capture = True
+                    next_fixed_capture = now_epoch + interval
+            else:
+                should_capture = scheduler.should_capture()
+            if not should_capture:
+                time.sleep(1)
+                continue
             try:
+                focus = self._current_focus_payload()
                 for monitor, raw in capture_all_monitors():
                     checksum = sha256(raw)
                     aad = screenshot_aad(str(self.session_id), checksum, monitor)
@@ -190,7 +217,14 @@ class SessionManager:
                     try:
                         self.client.post(
                             "/screenshot/upload/",
-                            data={"checksum": checksum, "monitor_number": str(monitor)},
+                            data={
+                                "checksum": checksum,
+                                "monitor_number": str(monitor),
+                                "window_title": focus.get("window_title", ""),
+                                "application_name": focus.get("app_name", ""),
+                                "active_tab_title": focus.get("tab_title", ""),
+                                "app_focus_seconds": str(focus.get("focus_seconds", 0)),
+                            },
                             files={
                                 "file": (
                                     f"{checksum}.aes-256-gcm.bin",
@@ -206,7 +240,7 @@ class SessionManager:
                         self.queue.enqueue("/screenshot/upload/", gcm_blob, checksum)
             except Exception:
                 pass
-            time.sleep(interval)
+            time.sleep(1)
 
     def _idle_loop(self):
         while self._running:
@@ -264,3 +298,45 @@ class SessionManager:
                     self.queue.mark_synced(row_id)
                 except Exception:
                     return
+
+    def _focus_loop(self):
+        while self._running:
+            if self._paused:
+                time.sleep(1)
+                continue
+            try:
+                current = self._platform_agent.get_active_window()
+                current_key = {
+                    "app_name": (current.app_name or "unknown").lower(),
+                    "tab_title": (current.browser_tab_title or current.window_title or "")[:512],
+                    "window_title": (current.window_title or "")[:512],
+                }
+                now = time.time()
+                with self._focus_lock:
+                    if current_key != self._last_focus:
+                        elapsed = max(0, int(now - self._focus_started))
+                        if elapsed:
+                            self.stats.append_focus_segment(
+                                {
+                                    "timestamp": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime(now)),
+                                    "application_name": self._last_focus["app_name"],
+                                    "active_tab_title": self._last_focus["tab_title"],
+                                    "window_title": self._last_focus["window_title"],
+                                    "focus_seconds": elapsed,
+                                }
+                            )
+                        self._last_focus = current_key
+                        self._focus_started = now
+            except Exception:
+                pass
+            time.sleep(1)
+
+    def _current_focus_payload(self) -> dict:
+        now = time.time()
+        with self._focus_lock:
+            return {
+                "app_name": self._last_focus["app_name"],
+                "tab_title": self._last_focus["tab_title"],
+                "window_title": self._last_focus["window_title"],
+                "focus_seconds": max(0, int(now - self._focus_started)),
+            }

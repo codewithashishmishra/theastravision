@@ -7,6 +7,7 @@ from django.test import Client, TestCase, override_settings
 from core.e2ee.ecdh import derive_shared_aes_key, export_public_spki_b64, generate_ephemeral_keypair
 from core.e2ee.envelope import decrypt_envelope
 from core.e2ee.services import create_handshake_session
+from core.middleware.e2ee_response_middleware import E2EEResponseMiddleware
 
 
 @override_settings(E2EE_ENABLED=True, REDIS_ALLOW=False)
@@ -50,6 +51,19 @@ class E2EEMiddlewareTests(TestCase):
         self.assertTrue(body.get("e2ee"))
         decrypted = decrypt_envelope(aes_key, body)
         self.assertIsInstance(decrypted, (dict, list))
+
+    def test_speak_route_exempt_from_e2ee(self):
+        mw = E2EEResponseMiddleware(lambda request: None)
+        path = "/api/v1/recruitment/ai-sessions/915092df-bcfc-43e8-aea6-f1f8424234ae/speak/"
+        self.assertTrue(mw._is_exempt(path))
+        self.assertTrue(mw._is_exempt(path.rstrip("/")))
+
+    def test_tracker_browser_login_exempt_from_e2ee(self):
+        mw = E2EEResponseMiddleware(lambda request: None)
+        self.assertTrue(mw._is_exempt("/api/v1/tracker/auth/browser/"))
+        self.assertTrue(mw._is_exempt("/api/v1/auth/login/password/"))
+        self.assertTrue(mw._is_exempt("/api/v1/auth/totp/verify-login/"))
+        self.assertTrue(mw._is_exempt("/api/v1/tracker/auth/bootstrap/"))
 
     def test_create_handshake_session_service(self):
         priv, pub = generate_ephemeral_keypair()

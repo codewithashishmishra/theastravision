@@ -4,6 +4,10 @@ const col = (key: string, label: string) => ({ key, label });
 const txt = (key: string, label: string, required = true) => ({ key, label, type: 'text' as const, required });
 const num = (key: string, label: string) => ({ key, label, type: 'number' as const });
 const area = (key: string, label: string) => ({ key, label, type: 'textarea' as const });
+const dat = (key: string, label: string, required = true) => ({ key, label, type: 'date' as const, required });
+const sel = (key: string, label: string, options: { value: string; label: string }[], required = true) => ({
+  key, label, type: 'select' as const, options, required,
+});
 
 export const resourcePageConfigs: Record<string, ResourcePageConfig> = {
   'attendance-regularization': {
@@ -18,14 +22,38 @@ export const resourcePageConfigs: Record<string, ResourcePageConfig> = {
     endpoint: '/shifts/rosters/',
     queryKey: 'shift-rosters',
     columns: [col('id', 'ID'), col('date', 'DATE')],
-    formFields: [txt('date', 'Date'), txt('shift', 'Shift ID')],
+    formFields: [dat('date', 'Roster Date'), txt('shift', 'Shift ID')],
   },
   'leave-policies': {
     title: 'Leave Policies',
     endpoint: '/leave/policies/',
     queryKey: 'leave-policies',
-    columns: [col('annual_allowance', 'ALLOWANCE'), col('accrual_frequency', 'FREQUENCY')],
-    formFields: [num('annual_allowance', 'Annual Allowance'), txt('accrual_frequency', 'Frequency')],
+    description: 'Define how many days employees accrue per leave type (e.g. Casual 12/year, Sick 10/year).',
+    columns: [col('leave_type', 'LEAVE TYPE'), col('annual_allowance', 'ALLOWANCE'), col('accrual_frequency', 'FREQUENCY')],
+    formFields: [
+      txt('leave_type', 'Leave Type ID'),
+      num('annual_allowance', 'Annual Allowance (days)'),
+      {
+        key: 'accrual_frequency',
+        label: 'Accrual Frequency',
+        type: 'select',
+        options: [
+          { value: 'Monthly', label: 'Monthly' },
+          { value: 'Yearly', label: 'Yearly' },
+        ],
+      },
+    ],
+  },
+  'ess-leave-balances': {
+    title: 'My Leave Balances',
+    endpoint: '/leave/balances/',
+    queryKey: 'ess-leave-balances',
+    columns: [
+      col('leave_type_name', 'LEAVE TYPE'),
+      col('year', 'YEAR'),
+      col('balance', 'BALANCE (DAYS)'),
+    ],
+    readOnly: true,
   },
   'org-branches': {
     title: 'Branches',
@@ -85,7 +113,7 @@ export const resourcePageConfigs: Record<string, ResourcePageConfig> = {
     endpoint: '/offboarding/resignations/',
     queryKey: 'resignations',
     columns: [col('last_working_date', 'LWD'), col('status', 'STATUS'), col('reason', 'REASON')],
-    formFields: [txt('employee', 'Employee ID'), txt('last_working_date', 'Last Working Date'), area('reason', 'Reason')],
+    formFields: [txt('employee', 'Employee ID'), dat('last_working_date', 'Last Working Date'), area('reason', 'Reason')],
   },
   'offboarding-clearance': {
     title: 'Clearance Tracker',
@@ -127,28 +155,32 @@ export const resourcePageConfigs: Record<string, ResourcePageConfig> = {
     endpoint: '/assets/assignments/',
     queryKey: 'asset-assignments',
     columns: [col('assigned_date', 'DATE')],
-    formFields: [txt('asset', 'Asset ID'), txt('employee', 'Employee ID'), txt('assigned_date', 'Date')],
+    formFields: [txt('asset', 'Asset ID'), txt('employee', 'Employee ID'), dat('assigned_date', 'Assigned Date')],
   },
   'assets-warranties': {
     title: 'Warranties',
     endpoint: '/assets/warranties/',
     queryKey: 'asset-warranties',
     columns: [col('provider', 'PROVIDER'), col('expiry_date', 'EXPIRY')],
-    formFields: [txt('asset', 'Asset ID'), txt('provider', 'Provider'), txt('expiry_date', 'Expiry Date')],
+    formFields: [txt('asset', 'Asset ID'), txt('provider', 'Provider'), dat('expiry_date', 'Expiry Date')],
   },
   'helpdesk-tickets': {
     title: 'My Tickets',
     endpoint: '/helpdesk/tickets/',
     queryKey: 'helpdesk-tickets',
     columns: [col('subject', 'SUBJECT'), col('status', 'STATUS'), col('priority', 'PRIORITY')],
-    formFields: [txt('subject', 'Subject'), area('description', 'Description'), txt('priority', 'Priority')],
+    formFields: [txt('subject', 'Subject'), area('description', 'Description'), sel('priority', 'Priority', [
+      { value: 'low', label: 'Low' },
+      { value: 'medium', label: 'Medium' },
+      { value: 'high', label: 'High' },
+    ])],
   },
   'performance-goals': {
     title: 'Goals',
     endpoint: '/performance/goals/',
     queryKey: 'goals',
     columns: [col('title', 'TITLE'), col('status', 'STATUS'), col('target_date', 'TARGET')],
-    formFields: [txt('title', 'Title'), txt('target_date', 'Target Date'), txt('status', 'Status')],
+    formFields: [txt('title', 'Title'), dat('target_date', 'Target Date'), txt('status', 'Status')],
   },
   'performance-reviews': {
     title: 'Performance Reviews',
@@ -161,8 +193,14 @@ export const resourcePageConfigs: Record<string, ResourcePageConfig> = {
     title: 'Surveys',
     endpoint: '/engagement/surveys/',
     queryKey: 'surveys',
+    description: 'Use questions JSON array or import CSV with columns: question,text,type',
+    sampleDownload: {
+      href: '/samples/engagement-survey-questions.csv',
+      filename: 'engagement-survey-questions.csv',
+      label: 'Download sample CSV',
+    },
     columns: [col('title', 'TITLE')],
-    formFields: [txt('title', 'Title'), area('questions', 'Questions JSON')],
+    formFields: [txt('title', 'Title'), area('questions', 'Questions (JSON array or paste CSV rows)')],
   },
   'engagement-announcements': {
     title: 'Announcements',
@@ -215,7 +253,7 @@ export const resourcePageConfigs: Record<string, ResourcePageConfig> = {
     endpoint: '/holidays/',
     queryKey: 'holidays',
     columns: [col('name', 'NAME'), col('date', 'DATE')],
-    formFields: [txt('name', 'Name'), txt('date', 'Date')],
+    formFields: [txt('name', 'Holiday Name'), dat('date', 'Date')],
   },
   'tenants-provisioning': {
     title: 'Tenant Provisioning',

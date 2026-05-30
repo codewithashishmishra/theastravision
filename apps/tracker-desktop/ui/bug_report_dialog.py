@@ -1,4 +1,4 @@
-import base64
+import os
 from PySide6.QtCore import Qt
 from PySide6.QtWidgets import (
     QDialog,
@@ -87,13 +87,13 @@ class BugReportDialog(QDialog):
 
         payload = {"description": desc}
         
-        # Optional: convert image to base64 if selected
+        # Optional screenshot metadata; backend stores a short key (<=512 chars).
         if self.selected_file_path:
             try:
-                with open(self.selected_file_path, "rb") as f:
-                    b64 = base64.b64encode(f.read()).decode("utf-8")
-                    payload["screenshot_key"] = f"data:image/png;base64,{b64}" # Temporary hack since we don't have S3 attached
-            except Exception as e:
+                filename = os.path.basename(self.selected_file_path)
+                payload["screenshot_key"] = f"local://{filename}"[:512]
+                payload["description"] = f"{desc}\n\n[attachment: {filename}]"
+            except Exception:
                 pass
 
         try:

@@ -204,15 +204,27 @@ class ConfigSettings(models.Model):
 
     @classmethod
     def get_or_create_key(cls, name="default_env_key") -> bytes:
-        from core.gcm_crypto import generate_data_key, wrap_data_key, unwrap_data_key
+        from django.conf import settings as django_settings
+
+        from core.gcm_crypto import generate_data_key, unwrap_data_key, wrap_data_key
+        from cryptography.exceptions import InvalidTag
+
         try:
             settings_obj = cls.objects.get(name=name)
-            return unwrap_data_key(settings_obj.wrapped_key)
+            try:
+                return unwrap_data_key(settings_obj.wrapped_key)
+            except InvalidTag:
+                if not django_settings.DEBUG:
+                    raise
+                settings_obj.delete()
         except cls.DoesNotExist:
-            data_key = generate_data_key()
-            wrapped = wrap_data_key(data_key)
-            cls.objects.create(name=name, wrapped_key=wrapped)
-            return data_key
+            pass
+
+        data_key = generate_data_key()
+        wrapped = wrap_data_key(data_key)
+        cls.objects.update_or_create(name=name, defaults={"wrapped_key": wrapped})
+        EnvConfiguration.get_cached_config.cache_clear()
+        return data_key
 
 class EnvConfiguration(models.Model):
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
@@ -300,3 +312,80 @@ class TenantAddon(models.Model):
     def __str__(self):
         state = 'ON' if self.enabled else 'OFF'
         return f"{self.tenant.name} — {self.addon_code} ({state})"
+
+
+class TenantEmailSettings(models.Model):
+    """Per-tenant sender identity for outbound email (platform SMTP transport)."""
+
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    tenant = models.OneToOneField(Tenant, on_delete=models.CASCADE, related_name='email_settings')
+    from_email = models.EmailField()
+    from_name = models.CharField(max_length=255, default='AastraaHR')
+    reply_to = models.EmailField(blank=True, default='')
+    notify_roles = models.JSONField(
+        default=list,
+        blank=True,
+        help_text='Role names notified on email events, e.g. Company Admin, HR Admin',
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    def __str__(self):
+        return f'{self.from_name} <{self.from_email}>'
+
+
+class OutboundEmailLog(models.Model):
+    STATUS_QUEUED = 'queued'
+    STATUS_SENT = 'sent'
+    STATUS_FAILED = 'failed'
+    STATUS_OPENED = 'opened'
+
+    STATUS_CHOICES = [
+        (STATUS_QUEUED, 'Queued'),
+        (STATUS_SENT, 'Sent'),
+        (STATUS_FAILED, 'Failed'),
+        (STATUS_OPENED, 'Opened'),
+    ]
+
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    tenant = models.ForeignKey(Tenant, on_delete=models.CASCADE, related_name='outbound_emails')
+    from_email = models.EmailField()
+    from_name = models.CharField(max_length=255, blank=True, default='')
+    to_emails = models.JSONField(default=list)
+    cc_emails = models.JSONField(default=list, blank=True)
+    subject = models.CharField(max_length=500)
+    body_html = models.TextField(blank=True, default='')
+    body_text = models.TextField(blank=True, default='')
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default=STATUS_QUEUED)
+    source = models.CharField(max_length=64, default='general')
+    source_id = models.CharField(max_length=64, blank=True, default='')
+    message_id = models.CharField(max_length=500, blank=True, default='')
+    smtp_error = models.TextField(blank=True, default='')
+    sent_at = models.DateTimeField(null=True, blank=True)
+    opened_at = models.DateTimeField(null=True, blank=True)
+    created_by = models.ForeignKey(
+        User,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='sent_emails',
+    )
+    parent_log = models.ForeignKey(
+        'self',
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='resends',
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ['-created_at']
+        indexes = [
+            models.Index(fields=['tenant', 'status', '-created_at']),
+            models.Index(fields=['tenant', 'source']),
+        ]
+
+    def __str__(self):
+        return f'{self.subject} → {self.to_emails}'

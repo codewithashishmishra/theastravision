@@ -1,0 +1,20 @@
+Dear {{ candidate_first_name }},
+
+Thank you for your interest in the {{ job_title }} position at {{ company_name }}.
+
+You are invited to complete a short AI-assisted voice interview with Astra.
+
+{% if scheduled_display %}Scheduled time: {{ scheduled_display }}
+{% endif %}
+You may answer in English or Hindi; responses are evaluated in English.
+
+Begin your interview:
+{{ interview_link }}
+
+{% if has_expiry %}This invitation link expires on {{ expiry_display }}.
+{% else %}This link remains valid until you complete your interview.
+{% endif %}
+
+Please use a quiet room and allow microphone, camera, and screen sharing when prompted.
+
+This is a transactional message regarding your job application.
